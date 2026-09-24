@@ -19,9 +19,23 @@ export function isBoard(value: unknown): value is Board {
     !Array.isArray(value.warnings) ||
     !value.warnings.every((item) => typeof item === "string") ||
     !Array.isArray(value.sources) ||
+    !record(value.incidents) ||
     !Array.isArray(value.departures)
   )
     return false;
+  const incidentBoard = value.incidents;
+  if (!["healthy", "stale", "unavailable"].includes(String(incidentBoard.status)) ||
+      !(incidentBoard.fetchedAt === null || timestamp(incidentBoard.fetchedAt)) ||
+      !(incidentBoard.feedTimestamp === null || timestamp(incidentBoard.feedTimestamp)) ||
+      !(incidentBoard.error === null || typeof incidentBoard.error === "string") ||
+      !Array.isArray(incidentBoard.items) || !incidentBoard.items.every((item) =>
+        record(item) && strings(item, ["id"]) && Array.isArray(item.translations) && item.translations.length > 0 &&
+        item.translations.every((translation) => record(translation) && typeof translation.text === "string" &&
+          (translation.language === undefined || typeof translation.language === "string")) &&
+        Array.isArray(item.stopIds) && item.stopIds.every((id) => typeof id === "string") &&
+        Array.isArray(item.lines) && item.lines.every((value) => typeof value === "string") &&
+        Array.isArray(item.activePeriods) && item.activePeriods.every((period) => record(period) &&
+          (period.start === null || timestamp(period.start)) && (period.end === null || timestamp(period.end))))) return false;
   if (
     !value.sources.every(
       (source) =>

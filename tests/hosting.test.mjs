@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { apiBaseUrl, checkHosting } from "../scripts/check-hosting.mjs";
+import { apiBaseUrl, checkHosting, HOSTING_ORIGINS } from "../scripts/check-hosting.mjs";
 
 test("Hosting refuses an absent, local, insecure or credential-bearing backend", () => {
   for (const url of [
@@ -11,6 +11,7 @@ test("Hosting refuses an absent, local, insecure or credential-bearing backend",
     "https://10.0.0.1",
     "https://u:p@api.example.com",
     "https://buscando-la-via-h.web.app",
+    "https://viaradar.web.app",
     "https://api.example.com/api",
   ]) {
     assert.throws(() => apiBaseUrl(url));
@@ -21,7 +22,7 @@ test("Hosting refuses an absent, local, insecure or credential-bearing backend",
   );
 });
 
-test("Hosting requires working JSON, no-store and browser CORS for both origins", async () => {
+test("Hosting requires working JSON, no-store and browser CORS for all hosting origins", async () => {
   let count = 0;
   const fetcher = async (url, options) => {
     count++;
@@ -43,7 +44,7 @@ test("Hosting requires working JSON, no-store and browser CORS for both origins"
     );
   };
   await checkHosting("https://api.example.com", fetcher);
-  assert.equal(count, 4);
+  assert.equal(count, HOSTING_ORIGINS.length * 2);
   await assert.rejects(
     checkHosting("https://api.example.com", async () => new Response("<html>")),
     /expected JSON/,

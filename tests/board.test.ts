@@ -122,3 +122,40 @@ test("Calendar cancellation prevents departure even with realtime update", () =>
   };
   assert.equal(createBoard(inactive, "72305", now).departures.length, 0);
 });
+
+test("Overdue train remains visible with fresh stopped-at evidence, but not stale or wrong-date evidence", () => {
+  const overdueData = { ...data, stopTimes: data.stopTimes.map((stop) =>
+    stop.stop_id === "72305" ? { ...stop, departure_time: "11:58:00" } : stop) };
+  const vehicle: Vehicle = {
+    trip: { tripId: "trip", startDate: "20260922" },
+    timestamp: now / 1000,
+    stopId: "72305",
+    currentStatus: "STOPPED_AT",
+    vehicle: { label: "R1-123-PLATF.(14)" },
+  };
+  feeds(undefined, vehicle);
+  assert.equal(createBoard(overdueData, "72305", now).departures[0]?.platform.value, "14");
+  for (const invalid of [
+    { ...vehicle, timestamp: now / 1000 - 91 },
+    { ...vehicle, trip: { tripId: "trip", startDate: "20260921" } },
+    { ...vehicle, currentStatus: "IN_TRANSIT_TO" },
+    { ...vehicle, stopId: "end" },
+  ]) {
+    feeds(undefined, invalid);
+    assert.equal(createBoard(overdueData, "72305", now).departures.length, 0);
+  }
+});
+
+test("Published platform withdrawal clears official information without retaining stale certainty", () => {
+  const vehicle: Vehicle = {
+    trip: { tripId: "trip", startDate: "20260922" }, timestamp: now / 1000,
+    stopId: "72305", currentStatus: "STOPPED_AT", vehicle: { label: "R1-123-PLATF.(14)" },
+  };
+  feeds(undefined, vehicle);
+  assert.equal(board()[0]?.platform.kind, "official");
+  feeds(undefined, { ...vehicle, vehicle: { label: "R1-123" } });
+  assert.notEqual(board()[0]?.platform.kind, "official");
+  assert.equal(board().length, 1);
+  feeds(undefined, { ...vehicle, timestamp: now / 1000 - 91 });
+  assert.notEqual(board()[0]?.platform.kind, "official");
+});

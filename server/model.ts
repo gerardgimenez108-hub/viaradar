@@ -96,6 +96,23 @@ export interface Board {
   generatedAt: string;
   staticImportedAt: string | null;
   sources: SourceStatus[];
+  incidents: IncidentBoard;
   departures: Departure[];
   warnings: string[];
+}
+
+export interface IncidentTranslation { language?: string; text: string; }
+export interface Incident {
+  id: string;
+  translations: IncidentTranslation[];
+  stopIds: string[];
+  lines: string[];
+  activePeriods: { start: string | null; end: string | null }[];
+}
+export interface IncidentBoard {
+  status: "healthy" | "stale" | "unavailable";
+  fetchedAt: string | null;
+  feedTimestamp: string | null;
+  error: string | null;
+  items: Incident[];
 }

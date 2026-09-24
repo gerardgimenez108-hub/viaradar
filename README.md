@@ -25,6 +25,10 @@ npm start
 
 Open **http://127.0.0.1:8787**. Service workers are intentionally disabled in development. On iOS use Safari → Share → Add to Home Screen; on Android use the browser install action. Phones require a trusted **HTTPS** deployment; an ordinary LAN HTTP address is not sufficient. Native iOS/Android installation has not been device-tested. Live trains require connectivity; offline retains only the app shell, never a cached live API response.
 
+### Start automatically on Windows
+
+Run `scripts/install-server-autostart.ps1` once from PowerShell in this folder. It registers a Task Scheduler task for the current Windows user, starts the local API at sign-in, and checks `/api/health` every 30 seconds. After three consecutive failures it restarts the API; Task Scheduler also restarts the watchdog if it exits. The process runs hidden and writes logs under `%LOCALAPPDATA%\ViaRadar\logs`. This does not deliberately restart a healthy API on a timer, avoiding unnecessary interruptions. Remove it with `Unregister-ScheduledTask -TaskName 'ViaRadar Local Server' -Confirm:$false`.
+
 ```sh
 npm test
 npm run typecheck
@@ -33,7 +37,9 @@ npm run collect
 
 With the production server running, `npm run test:browser` checks the PWA in a real headless browser. It uses installed Edge on Windows; elsewhere install Chromium with `npx playwright install chromium`. Set `BROWSER_CHANNEL` or `TEST_BASE_URL` to override the browser or local address. Synthetic test departures are browser-only fixtures and never enter the collector database.
 
-`collect` saves one pair of snapshots. The running server collects every 20 seconds and updates station observations independently of API visits. Refreshing the UI reads the latest collected result, not a new upstream request.
+`collect` saves the current vehicle-position, trip-update and service-alert snapshots. The running server collects every 20 seconds and updates station observations independently of API visits. Refreshing the UI reads the latest collected result, not a new upstream request.
+
+The board includes current Renfe GTFS-RT alerts only when their informed stop is L'Hospitalet (`72305`) or their route ID maps through the imported GTFS to an R1/R4 service serving that station. Expired and out-of-scope alerts are omitted. Renfe's translated message and active interval are shown as supplied; ViaRadar does not infer an incident severity. If the alerts feed is stale or unavailable, the API returns no alert items and reports its source status rather than presenting old notices as current.
 
 ## Configuration
 
@@ -61,7 +67,7 @@ Static station/trip indexes are built once per loaded dataset rather than rescan
 
 SQLite uses WAL and stores deduplicated payloads (SHA-256), fetch time and source timestamp. Raw snapshots retain 7 days; observations retain 90 days, purged after successful collection. National feeds can consume substantial disk space (potentially GB/week); monitor the data directory. Back up or delete `data/` only while the server is stopped. No personal data or user locations are collected.
 
-API: `GET /api/health`, `/api/stations`, `/api/departures?stationId=72305`, `/api/history`. All use `Cache-Control: no-store`. Every departure contains trip/service identifiers, line, destination, scheduled and expected times, cancellation flag, realtime timing flag, and a platform evidence object. Unmatched realtime trips are not guessed into the timetable. Destination falls back from trip headsign to the actual final static stop name, never a fabricated destination.
+API: `GET /api/health`, `/api/stations`, `/api/departures?stationId=72305`, `/api/history`. All use `Cache-Control: no-store`. The departures response includes a freshness/status object and only current, matching Renfe alerts. Every departure contains trip/service identifiers, line, destination, scheduled and expected times, cancellation flag, realtime timing flag, and a platform evidence object. Unmatched realtime trips are not guessed into the timetable. Destination falls back from trip headsign to the actual final static stop name, never a fabricated destination.
 
 ## Prediction roadmap
 
@@ -73,6 +79,7 @@ Before enabling stronger predictions: collect verified outcomes, split evaluatio
 
 - [Renfe vehicle-position dataset](https://data.renfe.com/dataset/ubicacion-vehiculos): [JSON](https://gtfsrt.renfe.com/vehicle_positions.json).
 - [Renfe trip updates](https://data.renfe.com/dataset/horarios-viaje-cercanias): [JSON](https://gtfsrt.renfe.com/trip_updates.json).
+- [Renfe incidents and notices](https://data.renfe.com/es/dataset/incidencias-avisos): [GTFS-RT JSON](https://gtfsrt.renfe.com/alerts.json).
 - [Renfe static Cercanías dataset](https://data.renfe.com/dataset/horarios-cercanias): [GTFS ZIP](https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_transit.zip).
 - [GTFS schedule reference](https://gtfs.org/documentation/schedule/reference/) and [realtime reference](https://gtfs.org/documentation/realtime/reference/).
 - [Jev primary announcement](https://typesafe.ai/blog/introducing-system-one-models-and-jev), [confidence documentation](https://docs.typesafe.ai/confidence).

@@ -1,5 +1,6 @@
 import { saveSnapshot } from "./store.ts";
 import type { Feed, SourceStatus } from "./model.ts";
+import { collectIncidents } from "./incidents.ts";
 export const MAX_AGE = 90;
 export const sources = new Map<
   string,
@@ -114,8 +115,9 @@ export function parseFeed(body: string): Feed {
   return { header: value.header, entity: entities } as Feed;
 }
 export async function collect(): Promise<void> {
-  await Promise.all(
-    [...sources].map(async ([kind, source]) => {
+  await Promise.all([
+    collectIncidents(),
+    ...[...sources].map(async ([kind, source]) => {
       try {
         const response = await fetch(source.status.url, {
           signal: AbortSignal.timeout(15000),
@@ -145,7 +147,7 @@ export async function collect(): Promise<void> {
         };
       }
     }),
-  );
+  ]);
 }
 export function sourceStatus(now = Date.now()): SourceStatus[] {
   return [...sources.values()].map(({ status, feed }) => ({

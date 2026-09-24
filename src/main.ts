@@ -1,5 +1,5 @@
 import "./style.css";
-import type { Board, Departure, Platform } from "../server/model.ts";
+import type { Board, Departure, Incident, IncidentBoard, Platform } from "../server/model.ts";
 import { isBoard } from "./board-contract.ts";
 import { shell } from "./shell.ts";
 import {readPreference,savePreference,resolveLanguage,translate,formatTime,formatTimestamp,formatNumber,formatPercent,type MessageKey,type LanguagePreference,type PreferenceStorage} from "./i18n.ts";
@@ -14,6 +14,34 @@ const number=(value:number)=>formatNumber(language,value);
 const percent=(value:number)=>formatPercent(language,value);
 const escape=(text:string)=>text.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const apiBase=(import.meta.env.VITE_API_BASE_URL||"").replace(/\/+$/,"");
+const themeMedia=window.matchMedia('(prefers-color-scheme: dark)');
+let themePreference='auto';
+try {const saved=storage()?.getItem('viaradar.theme');if(saved==='light'||saved==='dark')themePreference=saved;}catch{}
+function applyTheme():void {
+ const theme=themePreference==='auto'?(themeMedia.matches?'dark':'light'):themePreference;
+ document.documentElement.dataset.theme=theme;
+ document.querySelector('meta[name="theme-color"]')?.setAttribute('content',theme==='dark'?'#101c2b':'#f1f4f8');
+}
+applyTheme();themeMedia.addEventListener('change',applyTheme);
+interface Change { key:MessageKey; tone:string; values:Record<string,string>; until:number; }
+const changes=new Map<string,Change>();
+const serviceKey=(d:Departure)=>`${d.serviceDate}:${d.tripId}`;
+let nextCheck=Date.now()+20000;
+let pollTimer:ReturnType<typeof setTimeout>|undefined;
+function trackChanges(previous:Board|null,next:Board):void {
+ if(!previous||Date.now()-Date.parse(previous.generatedAt)>90000)return;
+ const old=new Map(previous.departures.map(d=>[serviceKey(d),d]));
+ for(const d of next.departures){
+  const before=old.get(serviceKey(d));if(!before)continue;
+  let change:Change|undefined;
+  const base={values:{},until:Date.now()+12000};
+  if(d.cancelled&&!before.cancelled)change={...base,key:'cancelChange',tone:'alert'};
+  else if(!d.cancelled&&d.platform.kind==='official'&&d.platform.value&&d.platform.value!==before.platform.value){
+   change={...base,key:before.platform.kind==='official'&&before.platform.value?'changedPlatform':'newPlatform',tone:before.platform.kind==='official'&&before.platform.value?'caution':'positive',values:{from:before.platform.value||'—',to:d.platform.value}};
+  }else if(!d.cancelled&&d.realtime&&before.realtime&&Math.abs(Date.parse(d.expectedAt)-Date.parse(before.expectedAt))>=60000)change={...base,key:'delayChanged',tone:'caution'};
+  if(change)changes.set(serviceKey(d),change);
+ }
+}
 let board:Board|null=null;
 let failed=false;
 let busy=false;
@@ -37,7 +65,11 @@ function row(original:Departure,stale:boolean):string {
  const delay=Math.round((Date.parse(d.expectedAt)-Date.parse(d.scheduledAt))/60000);
  const timing=d.cancelled?t(stale?'previouslyCancelled':'cancelled'):d.realtime?(delay>0?t('liveDelay',{minutes:number(delay)}):t('liveEstimate')):t('scheduled');
  const detail=d.cancelled?t(stale?'previousCancellation':'doNotBoard'):t(d.realtime?'updatedTime':'timetableTime');
- return `<article class="departure ${d.cancelled?'cancelled':''}"><div class="departure-time"><strong>${time(d.expectedAt)}</strong><small>${timing}</small>${delay>0?`<s>${time(d.scheduledAt)}</s>`:''}</div><div class="destination"><span class="line">${escape(d.line)}</span><h3>${escape(d.destinationUnavailable?t('unknownDestination'):d.destination)}</h3><small>${detail}</small></div><div class="platform ${platform.kind}"><strong>${platform.value?escape(platform.value):'—'}</strong><small>${t(platform.kind==='official'?'published':platform.kind==='prediction'?'estimate':'notPublished')}</small>${platform.kind==='prediction'?`<span>${t('share',{percent:percent(platform.confidence||0),count:number(platform.sampleCount)})}</span>`:''}</div><details class="evidence" data-service="${escape(`${d.serviceDate}:${d.tripId}`)}"><summary>${t('sourceDetails')}</summary><p>${escape(stale?t('staleEvidence'):evidence(d.platform,d.cancelled))}</p><p>${t('service')} ${escape(d.tripId)} · ${escape(d.serviceDate)}</p></details></article>`;
+ const change=stale?undefined:changes.get(serviceKey(d));
+ const activeChange=change&&change.until>Date.now()?change:undefined;
+ const minutes=Math.ceil((Date.parse(d.expectedAt)-Date.now())/60000);
+ const countdown=!stale&&!d.cancelled&&minutes>=0?`<span class="countdown">${minutes===0?t('due'):t('inMinutes',{minutes:number(minutes)})}</span>`:'';
+ return `<article style="animation-delay: -${activeChange?(Date.now()-(activeChange.until-12000))/1000:0}s" class="departure ${activeChange?'change-'+activeChange.tone:''} ${d.cancelled?'cancelled':''}"><div class="departure-time">${countdown}<strong>${time(d.expectedAt)}</strong><small>${timing}</small>${delay>0?`<s>${time(d.scheduledAt)}</s>`:''}</div><div class="destination"><span class="line">${escape(d.line)}</span><h3>${escape(d.destinationUnavailable?t('unknownDestination'):d.destination)}</h3><small>${detail}</small></div><div class="platform ${platform.kind}"><strong>${platform.value?escape(platform.value):'—'}</strong><small>${t(platform.kind==='official'?'publishedRenfe':platform.kind==='prediction'?'historicalEstimate':'notPublished')}</small>${platform.kind==='prediction'?`<span>${t('share',{percent:percent(platform.confidence||0),count:number(platform.sampleCount)})}</span>`:''}</div>${activeChange?`<p class="change-note">${escape(t(activeChange.key,activeChange.values))}</p>`:''}<details class="evidence" data-service="${escape(`${d.serviceDate}:${d.tripId}`)}"><summary>${t('sourceDetails')}</summary><p>${escape(stale?t('staleEvidence'):evidence(d.platform,d.cancelled))}</p><p>${t('service')} ${escape(d.tripId)} · ${escape(d.serviceDate)}</p></details></article>`;
 }
 function preserveDetails():Set<string> {return new Set(Array.from(app.querySelectorAll<HTMLDetailsElement>('details.evidence[open]')).map(el=>el.dataset.service!));}
 function renderRows(html:string,opened=preserveDetails()):void {
@@ -55,26 +87,79 @@ function filters():void {
  if(!values.includes(line))line='';
  select.value=line;
 }
+function incidentMessage(incident:Incident):string {
+ const exact=incident.translations.find(item=>item.language?.toLowerCase()===language);
+ const localized=incident.translations.find(item=>item.language?.toLowerCase().split('-')[0]===language);
+ return (exact||localized||incident.translations[0])?.text||'';
+}
+function incidentPeriods(incident:Incident):string[] {
+ if(!incident.activePeriods.length)return [t('incidentTimeUnknown')];
+ return incident.activePeriods.map(period=>{
+  const from=period.start?stamp(period.start):'';const until=period.end?stamp(period.end):'';
+  if(from&&until)return t('incidentActiveFromUntil',{from,until});
+  if(from)return t('incidentActiveFrom',{time:from});
+  if(until)return t('incidentActiveUntil',{time:until});
+  return t('incidentTimeUnknown');
+ });
+}
+function renderIncidents(incidents:IncidentBoard):void {
+ const area=app.querySelector<HTMLDivElement>('#incident-area');
+ if(!area)return;
+ if(incidents.status!=='healthy'){
+  const message=t(incidents.status==='stale'?'incidentsStale':'incidentsUnavailable');
+  area.innerHTML=`<p class="incident-unavailable" role="status">${escape(message)}${incidents.feedTimestamp?` · ${escape(t('feedTime',{time:stamp(incidents.feedTimestamp)}))}`:''}</p>`;
+  return;
+ }
+ if(!incidents.items.length){area.replaceChildren();return;}
+ const count=incidents.items.length;
+ area.innerHTML=`<button type="button" id="incident-trigger" class="incident-trigger" aria-haspopup="dialog"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4.5M12 17h.01"/></svg><span>${escape(t('renfeAlerts',{count}))}</span></button>`;
+ const details=app.querySelector<HTMLDivElement>('#incident-details');
+ if(details)details.innerHTML=incidents.items.map(incident=>{
+  const affected=[...(incident.stopIds.length?[t('incidentStop')]:[]),...(incident.lines.length?[t('incidentLines',{lines:incident.lines.join(', ')})]:[])].map(escape).join(' · ');
+  return `<article class="incident-card"><p class="incident-message">${escape(incidentMessage(incident))}</p><p class="incident-meta">${affected}</p><p class="incident-meta">${incidentPeriods(incident).map(escape).join('<br>')}</p></article>`;
+ }).join('')+`<p class="incident-source">${escape(t('incidentSource'))}${incidents.feedTimestamp?` · ${escape(t('feedTime',{time:stamp(incidents.feedTimestamp)}))}`:''}</p>`;
+ app.querySelector<HTMLButtonElement>('#incident-trigger')?.addEventListener('click',()=>app.querySelector<HTMLDialogElement>('#incident-dialog')?.showModal());
+}
 function render():void {
  if(!board){
-  if(failed){status.className='connection warning';status.textContent=t('cannotReach');renderRows(`<div class="empty"><span class="empty-icon">↗</span><h3>${t('unavailable')}</h3><p>${t('retry')}</p></div>`);}
+  if(failed){status.className='connection warning';status.textContent=t('cannotReach');renderRows(`<div class="empty"><h3>${t('unavailable')}</h3><p>${t('retry')}</p></div>`);}
   return;
  }
  const stale=failed||!navigator.onLine||Date.now()-Date.parse(board.generatedAt)>90000||board.sources.some(source=>source.healthy&&source.feedTimestamp&&Date.now()-Date.parse(source.feedTimestamp)>90000);
  const healthy=!stale&&board.sources.every(s=>s.healthy);
  status.className=`connection ${healthy?'good':'warning'}`;
  status.textContent=t(stale?'offlineStatus':healthy?'liveStatus':'limitedStatus');
+ renderIncidents(board.incidents);
  const rows=board.departures.filter(d=>!line||d.line===line);
- renderRows(rows.length?rows.map(d=>row(d,stale||(d.platform.kind==='official'&&!!d.platform.expiresAt&&Date.now()>Date.parse(d.platform.expiresAt)))).join(''):`<div class="empty"><span class="empty-icon">↗</span><h3>${t(line?'emptyLine':'empty')}</h3><p>${t(board.staticImportedAt?'emptyBody':'missingTimetable')}</p><p>${t('noInvented')}</p></div>`);
+ renderRows(rows.length?rows.map(d=>row(d,stale||(d.platform.kind==='official'&&!!d.platform.expiresAt&&Date.now()>Date.parse(d.platform.expiresAt)))).join(''):`<div class="empty"><h3>${t(line?'emptyLine':'empty')}</h3><p>${t(board.staticImportedAt?'emptyBody':'missingTimetable')}</p><p>${t('noInvented')}</p></div>`);
  document.querySelector('#updated')!.textContent=t('lastChecked',{time:time(board.generatedAt)})+(stale?t('outdated'):'');
  document.querySelector('#sources')!.innerHTML=board.sources.map(s=>`<p><strong>${t(s.kind==='vehicle_positions'?'vehicles':s.kind==='trip_updates'?'updates':'source')}</strong> · ${t(s.healthy&&!stale?'connected':'sourceUnavailable')}<br><small>${s.feedTimestamp?t('feedTime',{time:stamp(s.feedTimestamp)}):t('noFeed')}${s.error?` · ${t('feedError')}`:''}</small></p>`).join('')+`<p>${t('imported',{time:board.staticImportedAt?stamp(board.staticImportedAt):t('notImported')})}</p>`;
 }
 function renderShell():void {
  const opened=preserveDetails();
  const sourceOpen=app.querySelector<HTMLDetailsElement>('details.details')?.open||false;
+ const settingsOpen=app.querySelector<HTMLDetailsElement>('#settings')?.open||false;
  const dialogOpen=app.querySelector<HTMLDialogElement>('#install-dialog')?.open||false;
+ const incidentDialogOpen=app.querySelector<HTMLDialogElement>('#incident-dialog')?.open||false;
  const focusedId=(document.activeElement as HTMLElement|null)?.id;
  app.innerHTML=shell(t);
+ app.querySelector('#connection')!.insertAdjacentHTML('afterend','<div id="incident-area" class="incident-area" aria-live="polite"></div>');
+ app.insertAdjacentHTML('beforeend',`<dialog id="incident-dialog" aria-labelledby="incident-title"><form method="dialog"><button class="close" aria-label="${t('closeIncidents')}">×</button><p class="eyebrow">${t('incidentSource')}</p><h2 id="incident-title">${t('incidentTitle')}</h2><div id="incident-details"></div></form></dialog>`);
+ app.querySelector<HTMLDetailsElement>('#settings')!.open=settingsOpen;
+ app.querySelector<HTMLDetailsElement>('#settings')!.addEventListener('keydown',event=>{
+  if(event.key==='Escape'){
+   const settings=event.currentTarget as HTMLDetailsElement;
+   settings.open=false;
+   settings.querySelector('summary')?.focus();
+  }
+ });
+ const themeSelect=app.querySelector<HTMLSelectElement>('#theme')!;
+ themeSelect.value=themePreference;
+ themeSelect.addEventListener('change',()=>{
+  themePreference=themeSelect.value;
+  try{storage()?.setItem('viaradar.theme',themePreference);}catch{}
+  applyTheme();
+ });
  document.documentElement.lang=language;
  document.title=t('title');
  const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -97,6 +182,7 @@ function renderShell():void {
  app.querySelector<HTMLDetailsElement>('details.details')!.open=sourceOpen;
  for(const detail of Array.from(app.querySelectorAll<HTMLDetailsElement>('details.evidence')))if(opened.has(detail.dataset.service!))detail.open=true;
  if(dialogOpen)app.querySelector<HTMLDialogElement>('#install-dialog')!.showModal();
+ if(incidentDialogOpen)app.querySelector<HTMLDialogElement>('#incident-dialog')!.showModal();
  if(focusedId)document.getElementById(focusedId)?.focus({preventScroll:true});
 }
 function applyLanguage():void {language=resolveLanguage(preference,navigator.languages?.length?navigator.languages:[navigator.language]);renderShell();}
@@ -106,12 +192,17 @@ async function load():Promise<void>{
   const response=await fetch(`${apiBase}/api/departures?stationId=72305`,{cache:'no-store',signal:AbortSignal.timeout(12000)});
   if(!response.ok)throw new Error(`HTTP ${response.status}`);
   const candidate:unknown=await response.json();if(!isBoard(candidate))throw new Error('Invalid departure response');
-  board=candidate;failed=false;filters();render();
- }catch{failed=true;render();}finally{busy=false;refresh.disabled=false;}
+  if(!failed&&navigator.onLine)trackChanges(board,candidate);board=candidate;failed=false;filters();render();
+ }catch{failed=true;render();}finally{busy=false;refresh.disabled=false;nextCheck=Date.now()+20000;clearTimeout(pollTimer);pollTimer=setTimeout(()=>void load(),20000); }
 }
 renderShell();
 window.addEventListener('languagechange',()=>{if(preference==='auto')applyLanguage();});
 window.addEventListener('offline',render);
 window.addEventListener('online',()=>void load());
-void load();setInterval(()=>void load(),20000);setInterval(render,10000);
+void load();setInterval(render,10000);
+setInterval(()=>{
+ const indicator=document.querySelector('#next-refresh');
+ if(indicator)indicator.textContent=busy?t('checking'):t('nextRefresh',{seconds:Math.max(0,Math.ceil((nextCheck-Date.now())/1000))});
+ for(const [key,change] of changes)if(change.until<=Date.now()){changes.delete(key);render();}
+},1000);
 if('serviceWorker'in navigator&&!import.meta.env.DEV)navigator.serviceWorker.register('/sw.js').catch(console.warn);

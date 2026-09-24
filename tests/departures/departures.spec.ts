@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 import { DeparturesPage } from "./departures-page.ts";
 import type { Board, Departure } from "../../server/model.ts";
 
-function fixture(): Board {
+function fixture(alerts: Board["incidents"]["items"] = []): Board {
   const now = Date.now();
   const base = {
     serviceDate: "20260924",
@@ -68,6 +68,7 @@ function fixture(): Board {
     station: { id: "72305", name: "Hospitalet" },
     generatedAt: new Date(now).toISOString(),
     staticImportedAt: new Date(now).toISOString(),
+    incidents: { status: "healthy", fetchedAt: new Date(now).toISOString(), feedTimestamp: new Date(now).toISOString(), error: null, items: alerts },
     warnings: [],
     departures,
     sources: ["vehicle_positions", "trip_updates"].map((kind) => ({
@@ -176,6 +177,46 @@ test(
   },
 );
 
+test("Renfe alerts open as accessible localized details and render source text safely", { timeout: 30000 }, async t => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "es-ES", serviceWorkers: "block" });
+  const page = await context.newPage();
+  const alerts: Board["incidents"]["items"] = [{
+    id: "notice-1",
+    translations: [{ language: "es", text: "<img src=x onerror=alert(1)> Ascensor fuera de servicio" }, { language: "en", text: "Lift out of service" }],
+    stopIds: ["72305"], lines: ["R1"], activePeriods: [{ start: new Date(Date.now() - 60000).toISOString(), end: null }],
+  }];
+  const testBoard = fixture(alerts);
+  await page.route("**/api/departures?*", route => route.fulfill({ json: testBoard }));
+  await new DeparturesPage(page).goto();
+  const trigger = page.getByRole("button", { name: "Avisos de Renfe · 1" });
+  await trigger.waitFor();
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Información del servicio" });
+  await dialog.waitFor();
+  assert.match(await dialog.innerText(), /Ascensor fuera de servicio/);
+  assert.match(await dialog.innerText(), /L’Hospitalet de Llobregat/);
+  assert.match(await dialog.innerText(), /Líneas R1/);
+  assert.equal(await dialog.locator("img").count(), 0);
+  assert.match(await dialog.innerText(), /Activo desde/);
+  await page.getByRole("button", { name: "Cerrar información del servicio" }).click();
+  assert.deepEqual(await page.evaluate(() => document.querySelectorAll("[onerror]").length), 0);
+  await page.locator("#settings > summary").click();
+  await page.getByLabel("Idioma", { exact: true }).selectOption("en");
+  const englishTrigger = page.getByRole("button", { name: "Renfe alerts · 1" });
+  await englishTrigger.click();
+  const englishDialog = page.getByRole("dialog", { name: "Service information" });
+  await englishDialog.waitFor();
+  assert.match(await englishDialog.innerText(), /Lift out of service/);
+  await page.getByRole("button", { name: "Close service information" }).click();
+  testBoard.incidents = { status: "stale", fetchedAt: null, feedTimestamp: new Date(Date.now() - 120000).toISOString(), error: null, items: [] };
+  await page.getByRole("button", { name: "Refresh departures" }).click();
+  await page.getByText("Renfe notices are out of date", { exact: false }).waitFor();
+  assert.equal(await page.locator("#incident-trigger").count(), 0);
+  await context.close();
+});
+
 test(
   "First-visit offline PWA shell has assets but no cached live trains",
   { timeout: 30000 },
@@ -222,6 +263,7 @@ test("Device language selects Spanish or English with an explicit fallback", { t
     await page.route("**/api/departures?*", route => route.fulfill({ json: fixture() }));
     await new DeparturesPage(page).goto();
     await page.getByRole("article").first().waitFor();
+    await page.locator("#settings > summary").click();
     assert.equal(await page.locator("html").getAttribute("lang"), expected);
     assert.equal(await page.getByRole("combobox", { name: expected === "es" ? "Idioma" : "Language", exact: true }).inputValue(), "auto");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -242,10 +284,12 @@ test("Manual language persists and automatic mode follows languagechange", { tim
   await page.route("**/api/departures?*", route => route.fulfill({ json: fixture() }));
   await new DeparturesPage(page).goto();
   await page.getByRole("article").first().waitFor();
+  await page.locator("#settings > summary").click();
   await page.getByLabel("Idioma", { exact: true }).selectOption("en");
   assert.equal(await page.locator("html").getAttribute("lang"), "en");
   await page.reload();
   await page.getByRole("article").first().waitFor();
+  await page.locator("#settings > summary").click();
   assert.equal(await page.locator("html").getAttribute("lang"), "en");
   await page.getByLabel("Language", { exact: true }).selectOption("auto");
   assert.equal(await page.locator("html").getAttribute("lang"), "es");
@@ -261,4 +305,53 @@ test("Manual language persists and automatic mode follows languagechange", { tim
   await context.setOffline(true);
   await page.waitForFunction(() => document.querySelectorAll(".platform.official, .platform.prediction").length === 0);
   assert.doesNotMatch(await page.locator("body").innerText(), /Offline or update failed|Previously cancelled|Updated departure time/);
+});
+
+test("Appearance follows device, persists overrides, and highlights only meaningful changes", { timeout: 45000 }, async t => {
+  const browser = await launch(); t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "es-ES", colorScheme: "dark", serviceWorkers: "block", viewport: { width: 390, height: 844 } });
+  const page = await context.newPage(); const board = new DeparturesPage(page);
+  const data = fixture();
+  await page.route("**/api/departures?*", route => route.fulfill({ json: data }));
+  await board.goto(); await board.rows.first().waitFor();
+  await page.locator("#settings > summary").click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  assert.equal(await page.locator(".beta,.station-symbol").count(), 0);
+  assert.equal(await page.locator(".brand-icon").count(), 1);
+  assert.equal(await page.locator(".brand-icon").getAttribute("src"), "/icons/viaradar-mark.svg");
+  assert.equal(await page.locator("h1").innerText(), "L’Hospitalet de Llobregat");
+  assert.equal(await page.locator(".station-identity p").innerText(), "RODALIES DE CATALUNYA · BARCELONA");
+  const manifest = await page.evaluate(async () => {
+    const href = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')!.href;
+    return await (await fetch(href)).json() as { icons: { src: string }[] };
+  });
+  assert.deepEqual(manifest.icons.map(icon => icon.src), ["/icons/icon-192.png", "/icons/icon-512.png"]);
+  assert.equal(await page.evaluate(async () => (await fetch("/icons/viaradar-mark.svg")).status), 200);
+  assert.equal(await page.locator(".change-note").count(), 0);
+  await page.screenshot({ path: "test-results/redesign-mobile-dark.png", fullPage: true });
+  await page.getByLabel("Apariencia", { exact: true }).selectOption("light");
+  await page.reload(); await board.rows.first().waitFor();
+  await page.locator("#settings > summary").click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: "test-results/redesign-desktop-light.png", fullPage: true });
+  await page.getByLabel("Apariencia", { exact: true }).selectOption("auto");
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
+  const refresh = page.getByRole("button", { name: "Actualizar salidas" });
+  await refresh.click(); await board.ready();
+  assert.equal(await page.locator(".change-note").count(), 0);
+  data.departures[2].platform = { ...data.departures[0].platform, value: "8" };
+  await refresh.click(); await page.getByText("Vía publicada", { exact: true }).waitFor();
+  assert.equal(await page.locator(".change-positive").count(), 1);
+  data.departures[0].platform.value = "6";
+  await refresh.click(); await page.getByText("Cambio de vía: 4 → 6", { exact: true }).waitFor();
+  assert.equal(await page.locator(".change-caution").count(), 1);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  assert.equal(await page.locator(".change-caution").evaluate(el => getComputedStyle(el).animationName), "none");
+  await page.waitForTimeout(12500);
+  assert.equal(await page.locator(".change-note").count(), 0);
+  await refresh.click(); await board.ready();
+  assert.equal(await page.locator(".change-note").count(), 0);
 });

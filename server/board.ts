@@ -7,6 +7,7 @@ import type {
   Row,
 } from "./model.ts";
 import type { StaticData } from "./static.ts";
+import { incidentsForStation } from "./incidents.ts";
 import { activeService, gtfsTime, serviceDays } from "./time.ts";
 import { isFresh, liveFeed, sourceStatus } from "./realtime.ts";
 import { db } from "./store.ts";
@@ -99,6 +100,7 @@ export function createBoard(
     generatedAt: new Date(now).toISOString(),
     staticImportedAt: data?.importedAt || null,
     sources: sourceStatus(now),
+    incidents: incidentsForStation(data, stationId, now),
     departures: [],
     warnings: [],
   };
@@ -223,9 +225,14 @@ export function createBoard(
         : delay !== undefined
           ? scheduled + delay * 1000
           : scheduled;
+      // A timetable cutoff is not evidence that a delayed train has departed.
+      // Only fresh, same-service vehicle evidence can keep an overdue row visible.
+      const stoppedHere = !cancelled && vehicle?.stopId === stationId &&
+        isFresh(vehicle.timestamp, now) && matches(vehicle.trip) &&
+        (vehicle.currentStatus === "STOPPED_AT" || vehicle.currentStatus === 1);
       if (
         !Number.isFinite(expected) ||
-        expected < now - 60000 ||
+        (expected < now - 60000 && !stoppedHere) ||
         expected > now + 3 * 3600000
       )
         continue;

@@ -5,20 +5,13 @@ import { loadStatic } from "./static.ts";
 import { createBoard } from "./board.ts";
 import { collect, sourceStatus } from "./realtime.ts";
 import { db } from "./store.ts";
+import { configuredOrigins } from "./origins.ts";
 const data = loadStatic();
 const stationIds = (process.env.STATION_IDS || "72305")
   .split(",")
   .map((id) => id.trim())
   .filter(Boolean);
-const allowedOrigins = new Set(
-  (
-    process.env.ALLOWED_ORIGINS ||
-    "https://buscando-la-via-h.web.app,https://buscando-la-via-h.firebaseapp.com,https://viaradar.web.app"
-  )
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean),
-);
+const allowedOrigins = configuredOrigins(process.env.ALLOWED_ORIGINS);
 let collecting = false;
 async function tick() {
   if (collecting) return;

@@ -1,4 +1,4 @@
-const CACHE = "viaradar-shell-v2-i18n";
+const CACHE = "viaradar-shell-v5-settings-gear";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
@@ -12,6 +12,7 @@ self.addEventListener("install", (event) => {
         "/",
         "/manifest.webmanifest",
         "/manifest.es.webmanifest",
+        "/icons/viaradar-mark.svg",
         "/icons/icon-192.png",
         "/icons/icon-512.png",
         ...assets,

@@ -3,6 +3,8 @@ import { pathToFileURL } from "node:url";
 export const HOSTING_ORIGINS = [
   "https://buscando-la-via-h.web.app",
   "https://buscando-la-via-h.firebaseapp.com",
+  "https://viaradar.web.app",
+  "https://viaradar.firebaseapp.com",
 ];
 
 export function apiBaseUrl(value) {

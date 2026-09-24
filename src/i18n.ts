@@ -16,7 +16,11 @@ export function resolveLanguage(preference: LanguagePreference, languages: reado
   return "en";
 }
 export const en = {
+  "appearance": "Appearance", "light": "Light", "dark": "Dark", "due": "Due now", "inMinutes": "In {minutes} min", "nextRefresh": "Next check in {seconds} s", "checking": "Checking…", "newPlatform": "Platform published", "changedPlatform": "Platform changed: {from} → {to}", "delayChanged": "Departure time updated", "cancelChange": "Service cancelled",
+  "settings": "Settings",
   "home": "ViaRadar home",
+  "stationRegion": "RODALIES DE CATALUNYA · BARCELONA",
+  "stationType": "Rodalies station",
   "install": "Install app",
   "tagline": "Your next train. A clearer platform picture.",
   "connecting": "Connecting to departure information…",
@@ -103,10 +107,15 @@ export const en = {
   "variableEvidence": "Historical platforms are too variable to estimate",
   "cancelEvidence": "Service cancelled",
   "title": "ViaRadar · L’Hospitalet departures"
+  ,"renfeAlerts": "Renfe alerts · {count}", "incidentTitle": "Service information", "incidentStop": "L’Hospitalet de Llobregat", "incidentLines": "Lines {lines}", "incidentActiveFrom": "Active from {time}", "incidentActiveUntil": "Until {time}", "incidentActiveFromUntil": "{from} – {until}", "incidentTimeUnknown": "Active period not specified", "incidentsStale": "Renfe notices are out of date", "incidentsUnavailable": "Renfe notices temporarily unavailable", "closeIncidents": "Close service information", "incidentSource": "Source: Renfe alerts feed"
 } as const;
 export type MessageKey = keyof typeof en;
 export const es: Record<MessageKey, string> = {
+  "appearance": "Apariencia", "light": "Claro", "dark": "Oscuro", "due": "Salida próxima", "inMinutes": "En {minutes} min", "nextRefresh": "Próxima consulta en {seconds} s", "checking": "Consultando…", "newPlatform": "Vía publicada", "changedPlatform": "Cambio de vía: {from} → {to}", "delayChanged": "Hora de salida actualizada", "cancelChange": "Servicio cancelado",
+  "settings": "Ajustes",
   "home": "Inicio de ViaRadar",
+  "stationRegion": "RODALIES DE CATALUNYA · BARCELONA",
+  "stationType": "Estación de Rodalies",
   "install": "Instalar app",
   "tagline": "Tu próximo tren. La información de vía, más clara.",
   "connecting": "Conectando con la información de salidas…",
@@ -192,7 +201,8 @@ export const es: Record<MessageKey, string> = {
   "unknownEvidence": "No hay una vía publicada ni suficientes datos históricos",
   "variableEvidence": "Las vías históricas varían demasiado para hacer una estimación",
   "cancelEvidence": "Servicio cancelado",
-  "title": "ViaRadar · Salidas de L’Hospitalet"
+  "title": "ViaRadar · Salidas de L’Hospitalet",
+  "renfeAlerts": "Avisos de Renfe · {count}", "incidentTitle": "Información del servicio", "incidentStop": "L’Hospitalet de Llobregat", "incidentLines": "Líneas {lines}", "incidentActiveFrom": "Activo desde {time}", "incidentActiveUntil": "Hasta {time}", "incidentActiveFromUntil": "{from} – {until}", "incidentTimeUnknown": "Periodo de actividad no especificado", "incidentsStale": "Los avisos de Renfe están desactualizados", "incidentsUnavailable": "Avisos de Renfe temporalmente no disponibles", "closeIncidents": "Cerrar información del servicio", "incidentSource": "Fuente: feed de avisos de Renfe"
 };
 export function translate(language: Language, key: MessageKey, values: Record<string, string | number> = {}): string {
   return (language === "es" ? es[key] : en[key]).replace(/\{(\w+)\}/g, (token, name: string) => String(values[name] ?? token));
