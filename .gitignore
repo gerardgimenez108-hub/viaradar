@@ -1,0 +1,10 @@
+node_modules/
+tools/
+dist/
+data/
+.env
+.env.local
+.env.*.local
+.firebase/
+firebase-debug.log*
+test-results/

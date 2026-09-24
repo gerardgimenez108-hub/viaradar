@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "ViaRadar — Salidas de trenes",
+  "short_name": "ViaRadar",
+  "description": "Salidas de L’Hospitalet con vías publicadas y estimaciones claramente diferenciadas.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F7FB",
+  "theme_color": "#133044",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "lang": "es"
+}

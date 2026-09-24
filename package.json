@@ -1,0 +1,35 @@
+{
+  "name": "viaradar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"node --experimental-strip-types --watch server/index.ts\" \"vite --host 127.0.0.1\"",
+    "build": "tsc --noEmit && vite build",
+    "start": "node --experimental-strip-types server/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
+    "collect": "node --experimental-strip-types server/collect.ts",
+    "tunnel:quick": "powershell -ExecutionPolicy Bypass -File scripts/run-tunnel.ps1 -Quick",
+    "funnel": "powershell -ExecutionPolicy Bypass -File scripts/run-funnel.ps1",
+    "import:gtfs": "node --experimental-strip-types server/import.ts",
+    "test:browser": "node --experimental-strip-types --test tests/departures/departures.spec.ts",
+    "check:hosting": "node scripts/check-hosting.mjs"
+  },
+  "dependencies": {
+    "csv-parse": "^7.0.2",
+    "fflate": "^0.8.2",
+    "luxon": "^3.7.2"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.0",
+    "playwright": "^1.63.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0"
+  }
+}

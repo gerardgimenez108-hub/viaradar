@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "buscando-la-via-h"
+  },
+  "targets": {
+    "buscando-la-via-h": {
+      "hosting": {
+        "viaradar": [
+          "viaradar"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
