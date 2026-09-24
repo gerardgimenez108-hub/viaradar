@@ -3,6 +3,7 @@ export const DEFAULT_ORIGINS = [
   "https://buscando-la-via-h.firebaseapp.com",
   "https://viaradar.web.app",
   "https://viaradar.firebaseapp.com",
+  "https://viaradar.vercel.app",
   "http://localhost:8787",
   "http://127.0.0.1:8787",
   "http://localhost:5173",
