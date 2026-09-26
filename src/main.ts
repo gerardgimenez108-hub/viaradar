@@ -69,7 +69,7 @@ function row(original:Departure,stale:boolean):string {
  const activeChange=change&&change.until>Date.now()?change:undefined;
  const minutes=Math.ceil((Date.parse(d.expectedAt)-Date.now())/60000);
  const countdown=!stale&&!d.cancelled&&minutes>=0?`<span class="countdown">${minutes===0?t('due'):t('inMinutes',{minutes:number(minutes)})}</span>`:'';
- return `<article style="animation-delay: -${activeChange?(Date.now()-(activeChange.until-12000))/1000:0}s" class="departure ${activeChange?'change-'+activeChange.tone:''} ${d.cancelled?'cancelled':''}"><div class="departure-time">${countdown}<strong>${time(d.expectedAt)}</strong><small>${timing}</small>${delay>0?`<s>${time(d.scheduledAt)}</s>`:''}</div><div class="destination"><span class="line">${escape(d.line)}</span><h3>${escape(d.destinationUnavailable?t('unknownDestination'):d.destination)}</h3><small>${detail}</small></div><div class="platform ${platform.kind}"><strong>${platform.value?escape(platform.value):'—'}</strong><small>${t(platform.kind==='official'?'publishedRenfe':platform.kind==='prediction'?'historicalEstimate':'notPublished')}</small>${platform.kind==='prediction'?`<span>${t('share',{percent:percent(platform.confidence||0),count:number(platform.sampleCount)})}</span>`:''}</div>${activeChange?`<p class="change-note">${escape(t(activeChange.key,activeChange.values))}</p>`:''}<details class="evidence" data-service="${escape(`${d.serviceDate}:${d.tripId}`)}"><summary>${t('sourceDetails')}</summary><p>${escape(stale?t('staleEvidence'):evidence(d.platform,d.cancelled))}</p><p>${t('service')} ${escape(d.tripId)} · ${escape(d.serviceDate)}</p></details></article>`;
+ return `<article style="animation-delay: -${activeChange?(Date.now()-(activeChange.until-12000))/1000:0}s" class="departure ${activeChange?'change-'+activeChange.tone:''} ${d.cancelled?'cancelled':''}"><div class="departure-time">${countdown}<strong>${time(d.expectedAt)}</strong><small>${timing}</small>${delay>0?`<s>${time(d.scheduledAt)}</s>`:''}</div><div class="destination"><span class="line">${escape(d.line)}</span><h3>${escape(d.destinationUnavailable?t('unknownDestination'):d.destination)}</h3><small>${detail}</small></div><div class="platform ${platform.kind}"><span class="platform-label">${t("platformLabel")}</span><strong>${platform.value?escape(platform.value):'—'}</strong><small>${t(platform.kind==='official'?'publishedRenfe':platform.kind==='prediction'?'historicalEstimate':'notPublished')}</small>${platform.kind==='prediction'?`<span>${t('share',{percent:percent(platform.confidence||0),count:number(platform.sampleCount)})}</span>`:''}</div>${activeChange?`<p class="change-note">${escape(t(activeChange.key,activeChange.values))}</p>`:''}<details class="evidence" data-service="${escape(`${d.serviceDate}:${d.tripId}`)}"><summary>${t('sourceDetails')}</summary><p>${escape(stale?t('staleEvidence'):evidence(d.platform,d.cancelled))}</p><p>${t('service')} ${escape(d.tripId)} · ${escape(d.serviceDate)}</p></details></article>`;
 }
 function preserveDetails():Set<string> {return new Set(Array.from(app.querySelectorAll<HTMLDetailsElement>('details.evidence[open]')).map(el=>el.dataset.service!));}
 function renderRows(html:string,opened=preserveDetails()):void {
@@ -112,7 +112,7 @@ function renderIncidents(incidents:IncidentBoard):void {
  }
  if(!incidents.items.length){area.replaceChildren();return;}
  const count=incidents.items.length;
- area.innerHTML=`<button type="button" id="incident-trigger" class="incident-trigger" aria-haspopup="dialog"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4.5M12 17h.01"/></svg><span>${escape(t('renfeAlerts',{count}))}</span></button>`;
+ area.innerHTML=`<button type="button" id="incident-trigger" class="incident-trigger" aria-haspopup="dialog" aria-label="${escape(t('renfeAlerts',{count}))}"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span>${escape(t('renfeAlertsLabel'))}</span><span class="incident-count" aria-hidden="true">${count}</span></button>`;
  const details=app.querySelector<HTMLDivElement>('#incident-details');
  if(details)details.innerHTML=incidents.items.map(incident=>{
   const affected=[...(incident.stopIds.length?[t('incidentStop')]:[]),...(incident.lines.length?[t('incidentLines',{lines:incident.lines.join(', ')})]:[])].map(escape).join(' · ');
@@ -138,6 +138,7 @@ function render():void {
 function renderShell():void {
  const opened=preserveDetails();
  const sourceOpen=app.querySelector<HTMLDetailsElement>('details.details')?.open||false;
+ const guideOpen=app.querySelector<HTMLDetailsElement>('#how-it-works')?.open||false;
  const settingsOpen=app.querySelector<HTMLDetailsElement>('#settings')?.open||false;
  const dialogOpen=app.querySelector<HTMLDialogElement>('#install-dialog')?.open||false;
  const incidentDialogOpen=app.querySelector<HTMLDialogElement>('#incident-dialog')?.open||false;
@@ -180,6 +181,7 @@ function renderShell():void {
  app.querySelector('#install')!.addEventListener('click',()=>app.querySelector<HTMLDialogElement>('#install-dialog')!.showModal());
  filters();render();
  app.querySelector<HTMLDetailsElement>('details.details')!.open=sourceOpen;
+ app.querySelector<HTMLDetailsElement>('#how-it-works')!.open=guideOpen;
  for(const detail of Array.from(app.querySelectorAll<HTMLDetailsElement>('details.evidence')))if(opened.has(detail.dataset.service!))detail.open=true;
  if(dialogOpen)app.querySelector<HTMLDialogElement>('#install-dialog')!.showModal();
  if(incidentDialogOpen)app.querySelector<HTMLDialogElement>('#incident-dialog')!.showModal();
@@ -196,6 +198,11 @@ async function load():Promise<void>{
  }catch{failed=true;render();}finally{busy=false;refresh.disabled=false;nextCheck=Date.now()+20000;clearTimeout(pollTimer);pollTimer=setTimeout(()=>void load(),20000); }
 }
 renderShell();
+// Dismiss the display menu without intercepting the control selected outside it.
+document.addEventListener('pointerdown',event=>{
+ const settings=app.querySelector<HTMLDetailsElement>('#settings');
+ if(settings?.open&&event.target instanceof Node&&!settings.contains(event.target))settings.open=false;
+});
 window.addEventListener('languagechange',()=>{if(preference==='auto')applyLanguage();});
 window.addEventListener('offline',render);
 window.addEventListener('online',()=>void load());

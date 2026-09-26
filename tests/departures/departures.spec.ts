@@ -90,6 +90,71 @@ const launch = () =>
     headless: true,
   });
 
+test("Mobile departure board prioritizes trains without shrinking touch controls", { timeout: 45000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const notices: Board["incidents"]["items"] = [{
+    id: "mobile-notice",
+    translations: [{ language: "es", text: "Aviso de prueba sobre el servicio." }],
+    stopIds: ["72305"],
+    lines: ["R4"],
+    activePeriods: [{ start: new Date(Date.now() - 60000).toISOString(), end: null }],
+  }];
+  const context = await browser.newContext({
+    locale: "es-ES", serviceWorkers: "block", viewport: { width: 375, height: 812 },
+  });
+  const page = await context.newPage();
+  await page.route("**/api/departures?*", (route) => route.fulfill({ json: fixture(notices) }));
+  const board = new DeparturesPage(page);
+  await board.goto();
+  await board.rows.first().waitFor();
+  await page.getByRole("button", { name: "Avisos de Renfe · 1" }).waitFor();
+
+  for (const width of [320, 375, 390, 844, 1440]) {
+    await page.setViewportSize({ width, height: width === 844 ? 390 : 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false,
+        `Horizontal overflow at ${width}px in ${colorScheme} mode`);
+      const firstTrain = await board.rows.first().boundingBox();
+      assert.ok(firstTrain);
+      if (width === 375 || width === 390) {
+        assert.ok(firstTrain.y <= 250, `First train starts too low: ${firstTrain.y}px at ${width}px`);
+      }
+      for (const selector of ["#settings > summary", "#install", "#refresh", "#line", "#incident-trigger"]) {
+        const control = await page.locator(selector).boundingBox();
+        assert.ok(control && control.height >= 44 && control.width >= 44,
+          `${selector} is smaller than the 44px mobile touch target`);
+      }
+      if (width === 375) {
+        await page.screenshot({ path: `test-results/mobile-first-${colorScheme}.png` });
+      }
+    }
+  }
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.locator("#settings > summary").click();
+  assert.equal(await page.getByLabel("Idioma", { exact: true }).isVisible(), true);
+  await page.getByLabel("Idioma", { exact: true }).selectOption("en");
+  assert.equal(await page.locator("html").getAttribute("lang"), "en");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await page.locator("#settings > summary").click();
+  await page.locator("#how-it-works > summary").click();
+  assert.match(await page.locator("#how-it-works").innerText(), /not the chance of being right/);
+  await page.getByRole("button", { name: "Renfe alerts · 1" }).click();
+  const noticeDialog = page.getByRole("dialog", { name: "Service information" });
+  await noticeDialog.waitFor();
+  const noticeBox = await noticeDialog.boundingBox();
+  assert.ok(noticeBox && noticeBox.width <= 375);
+  await page.screenshot({ path: "test-results/mobile-notices.png" });
+  await page.getByRole("button", { name: "Close service information" }).click();
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false,
+    "Enlarged text must reflow without horizontal scrolling");
+  assert.equal(await board.rows.count(), 4);
+  await context.close();
+});
+
 test(
   "Departure states, mobile controls, and offline cancellation evidence",
   { timeout: 30000 },
@@ -112,7 +177,7 @@ test(
     assert.equal(await page.locator(".platform.official").count(), 1);
     assert.match(
       await page.locator(".platform.prediction").innerText(),
-      /85% historical share/,
+      /85% of 40 previous trains/,
     );
     assert.equal(
       await page.evaluate(
@@ -204,6 +269,7 @@ test("Renfe alerts open as accessible localized details and render source text s
   assert.deepEqual(await page.evaluate(() => document.querySelectorAll("[onerror]").length), 0);
   await page.locator("#settings > summary").click();
   await page.getByLabel("Idioma", { exact: true }).selectOption("en");
+  await page.locator("#settings > summary").click();
   const englishTrigger = page.getByRole("button", { name: "Renfe alerts · 1" });
   await englishTrigger.click();
   const englishDialog = page.getByRole("dialog", { name: "Service information" });
@@ -320,7 +386,7 @@ test("Appearance follows device, persists overrides, and highlights only meaning
   assert.equal(await page.locator(".brand-icon").count(), 1);
   assert.equal(await page.locator(".brand-icon").getAttribute("src"), "/icons/viaradar-mark.svg");
   assert.equal(await page.locator("h1").innerText(), "L’Hospitalet de Llobregat");
-  assert.equal(await page.locator(".station-identity p").innerText(), "RODALIES DE CATALUNYA · BARCELONA");
+  assert.equal(await page.locator(".station-identity p").innerText(), "Salidas y vías, con datos de Renfe.");
   const manifest = await page.evaluate(async () => {
     const href = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')!.href;
     return await (await fetch(href)).json() as { icons: { src: string }[] };
@@ -339,6 +405,7 @@ test("Appearance follows device, persists overrides, and highlights only meaning
   assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
   await page.emulateMedia({ colorScheme: "light" });
   await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
+  await page.locator("#settings > summary").click();
   const refresh = page.getByRole("button", { name: "Actualizar salidas" });
   await refresh.click(); await board.ready();
   assert.equal(await page.locator(".change-note").count(), 0);
