@@ -1,6 +1,6 @@
 # Verification — 27 September 2026
 
-**Prospective measurement is implemented and active in the local/public PC-backed API. The predictor is unchanged.** This work unit has not been committed, pushed or deployed to Firebase. The preceding frontend release remains `41d27ef`, deployed to https://viaradar.web.app on 26 September. Backend activation is separate from a frontend release.
+**Prospective measurement is implemented and active in the local/public PC-backed API. The predictor is unchanged.** This work unit is committed and pushed to GitHub as `800ed85`. It has **not** been deployed to Firebase. The preceding frontend release remains `41d27ef`, deployed to https://viaradar.web.app on 26 September. Backend activation is separate from a frontend release.
 
 ## Checks actually executed
 
