@@ -1,49 +1,52 @@
-# Firebase is prepared, not deployed
+# Deploy the frontend to Firebase Hosting
 
-ViaRadar remains a locally runnable app without Jev. The supplied Firebase project is **buscando-la-via-h**. These files prepare its frontend for a later, explicitly authorized deployment; they do not create cloud resources or provide a running remote backend.
+**Production frontend: https://viaradar.web.app/**. Project ID: `buscando-la-via-h`. Hosting target and site: `viaradar`. Renaming the Firebase display name does not rename these IDs. Do not substitute the legacy Vercel deployment.
 
-## What is configured
+The frontend was last published in the preceding work unit on 26 September 2026 (`41d27ef`). Check [verification](verification.md) for newer work and whether it has been deployed.
 
-| File                        | Purpose                                                                                                         |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `config/firebase.web.json`  | Exact public web-app configuration supplied by the user. It is not imported by the app.                         |
-| `.firebaserc`               | Selects the project ID for a future Firebase CLI operation.                                                     |
-| `firebase.json`             | Publishes only `dist`, uses an SPA fallback, and checks the backend before rebuilding. No invented API rewrite. |
-| `scripts/check-hosting.mjs` | Refuses deployment without a reachable HTTPS backend serving the expected API and CORS headers.                 |
+## What Firebase hosts
 
-No Firebase SDK or Analytics initialization is added. Keeping a `measurementId` in a configuration file does not activate tracking. No Authentication, Firestore, Storage, security rules, billing settings or deployment has been changed. Firebase web configuration identifies the project; it does **not** grant administrator or CLI access. [Firebase API-key guidance](https://firebase.google.com/docs/projects/api-keys).
+Firebase serves `dist/` as a PWA. The API, 20-second collector, timetable and SQLite history run on the Windows PC, exposed through `https://hp-gerard.tail46e6a0.ts.net`. Deploying the PWA does not update that Node process or give it uptime when the PC is asleep.
 
-## The missing piece: a persistent backend
+| File | Purpose |
+| --- | --- |
+| `.firebaserc` | Project `buscando-la-via-h`, target `viaradar` maps to site `viaradar` |
+| `firebase.json` | Static `dist`, SPA fallback, cache headers, backend check then build |
+| `scripts/check-hosting.mjs` | Validate HTTPS backend, health, board contract, no-store and all four Firebase origins |
+| `config/firebase.web.json` | Public project configuration; not imported by the app |
 
-Firebase Hosting serves the built PWA. It does not execute this Node API, keep the 20-second collector running, or preserve the SQLite history. Dynamic backends require a separate service; Firebase can integrate with Cloud Run, but no such service is configured here. [Hosting configuration](https://firebase.google.com/docs/hosting/full-config), [Hosting with Cloud Run](https://firebase.google.com/docs/hosting/cloud-run).
+No Firebase SDK or Analytics runs in the app. The client API key is not an administrator credential. Never put an OAuth token, server secret or model API key into frontend configuration.
 
-The smallest backend continuation is a supervised Node process with persistent local storage, HTTPS, backups and a reliable continuous collector. Cloud Run needs a deliberate storage/collector redesign: its container filesystem is temporary, and instances can stop. Do not upload the SQLite app unchanged and assume its history is durable. Firestore or another managed durable store is a possible migration, not something already implemented. [Cloud Run runtime contract](https://docs.cloud.google.com/run/docs/container-contract#file_system).
+## Publish an authorized release
 
-## Before any frontend deployment
-
-1. Deploy and validate a backend with persistent storage; import the timetable and verify ongoing snapshots. Configure its CORS allowlist for `https://buscando-la-via-h.web.app` and `https://buscando-la-via-h.firebaseapp.com`.
-2. Set `VITE_API_BASE_URL` in the same shell used for checking and building. Use the backend origin or path prefix, without a final `/api`. The value is public and embedded in the frontend bundle; never put a credential there.
-3. Run the check below. Only after explicit deployment authorization and authenticated project access should an operator run the Firebase CLI deployment.
-
-PowerShell, replacing the placeholder with the **real deployed backend**:
+Run from the repository root in PowerShell, after tests pass. Firebase CLI must be authenticated to an account with access to this project. Check the active account; do not post login codes in documentation.
 
 ```powershell
-$env:VITE_API_BASE_URL = "https://your-real-backend.example"
-node scripts/check-hosting.mjs
+git status -sb
+npm test
+npm run build
+# Requires a running local built app:
+npm run test:browser
+
+$env:VITE_API_BASE_URL = 'https://hp-gerard.tail46e6a0.ts.net'
+npm run check:hosting
+firebase deploy --only hosting:viaradar --project buscando-la-via-h
 ```
 
-The example hostname is not a provisioned service. The check rejects missing values, localhost/private literal addresses, plain HTTP, credentials, HTML fallback responses, missing browser CORS, cacheable live API responses, invalid board contracts and stale board timestamps. It performs read-only API requests. An empty departure list is valid; it does not require fabricated trains or a platform prediction to pass. It checks both default Hosting origins. Add any future custom origin deliberately to both the server allowlist and the check.
+Predeploy repeats the backend check and builds under the same environment. The guard needs the shell variable; `.env.local` alone is not enough. `VITE_API_BASE_URL` is embedded publicly in the bundle and must omit `/api`. If PowerShell's CLI shim has issues, use the installed `firebase.cmd`; do not bypass the check.
 
-The Hosting predeploy hooks run this check and then `npm run build` under the same environment. The guard intentionally requires a shell environment variable rather than assuming a `.env` file was loaded. Deploying the frontend without the backend would otherwise yield an attractive but nonfunctional board. Do not remove the guard to make an incomplete deployment pass.
+The check verifies four origins: `.web.app` and `.firebaseapp.com` for both `viaradar` and `buscando-la-via-h`. An `ALLOWED_ORIGINS` override must retain all four for this guard. It rejects a local/insecure URL, credentials in the URL, HTML fallback responses, stale board timestamps, incorrect CORS or cacheable live responses. Empty overnight departures are valid. The check does not prove 24/7 availability or prediction quality.
 
-## Readiness checklist
+## Verify and recover
 
-- [ ] Backend deployed on persistent infrastructure and reachable over trusted HTTPS.
-- [ ] Collection continues without an open browser and after process restart.
-- [ ] Timetable import refresh and data retention scheduled and monitored.
-- [ ] Both Hosting origins can read the API through browser CORS.
-- [ ] Deployment precondition succeeds against the real backend.
-- [ ] User authorizes deployment and authenticates an account with project access.
-- [ ] Real-device iOS/Android installation and offline behavior verified after deployment.
+1. Confirm **Hosting URL: https://viaradar.web.app** in CLI output.
+2. Fetch/open that exact URL. Compare its JS/CSS asset names with `dist/index.html` and inspect the new feature.
+3. Verify the public API is reachable from the deployed browser, not only from a terminal. Check source freshness and board/notice states.
+4. Record commit and release verification. GitHub push and Firebase deploy are independent operations; verify both.
 
-No production backend URL has been supplied or verified yet. Local development continues to use the same-origin `/api` proxy and needs neither Firebase nor a Jev account.
+If an installed PWA remains on an older loaded screen, close/reopen or refresh while online. The service worker caches the shell, never live API responses. Do not delete the server database to fix browser caching.
+
+- If the API check fails, inspect the PC, watchdog, Tailscale and CORS using the [runbook](self-hosting.md). Do not deploy a knowingly disconnected build.
+- Revert the frontend by building/deploying an intended previous revision or using a known previous Hosting release. This does not revert backend schema/code.
+- Backend-only measurement changes need a tested Node restart, not a Firebase deployment.
+- No automated release pipeline, Cloud Run backend, Firestore migration, billing change or managed uptime guarantee is configured by this project.

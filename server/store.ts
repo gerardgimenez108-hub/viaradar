@@ -1,3 +1,4 @@
+import { initializePredictionMeasurement } from "./measurement.ts";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
@@ -9,6 +10,7 @@ db.exec(`PRAGMA journal_mode=WAL;
  CREATE TABLE IF NOT EXISTS snapshots(id INTEGER PRIMARY KEY, kind TEXT NOT NULL, fetched_at INTEGER NOT NULL, feed_timestamp INTEGER, hash TEXT NOT NULL, body TEXT NOT NULL, UNIQUE(kind,hash));
  CREATE INDEX IF NOT EXISTS snapshots_time ON snapshots(fetched_at);
  CREATE TABLE IF NOT EXISTS observations(service_date TEXT, trip_id TEXT, station_id TEXT, line TEXT, destination TEXT, platform TEXT, observed_at INTEGER, PRIMARY KEY(service_date,trip_id,station_id));`);
+initializePredictionMeasurement(db);
 export function saveSnapshot(
   kind: string,
   body: string,

@@ -159,3 +159,26 @@ test("Published platform withdrawal clears official information without retainin
   feeds(undefined, { ...vehicle, timestamp: now / 1000 - 91 });
   assert.notEqual(board()[0]?.platform.kind, "official");
 });
+
+test("Collector measurement labels only later STOPPED_AT, while board reads alone never create attempts", async () => {
+  const { db } = await import("../server/store.ts");
+  const { measurePredictionBoard, predictionMetrics } = await import("../server/measurement.ts");
+  db.exec("DELETE FROM observations; DELETE FROM prediction_attempts; DELETE FROM prediction_official_seen;");
+  feeds();
+  for (const source of sources.values()) source.status.feedTimestamp = new Date(now).toISOString();
+  const initial = createBoard(data, "72305", now);
+  assert.equal(predictionMetrics(db, "72305", now).engines.length, 0);
+  measurePredictionBoard(db, initial, now);
+  assert.equal(predictionMetrics(db, "72305", now).engines[0]?.abstained, 1);
+  for (const status of ["INCOMING_AT", "STOPPED_AT"]) {
+    const later = now + (status === "INCOMING_AT" ? 20000 : 40000);
+    feeds(undefined, { trip: { tripId: "trip", startDate: "20260922" }, stopId: "72305",
+      timestamp: later / 1000, currentStatus: status, vehicle: { label: "R1-PLATF.(4)" } });
+    for (const source of sources.values()) {
+      source.feed!.header.timestamp = later / 1000;
+      source.status.feedTimestamp = new Date(later).toISOString();
+    }
+    measurePredictionBoard(db, createBoard(data, "72305", later), later);
+    assert.equal(predictionMetrics(db, "72305", later).engines[0]?.labelled, status === "STOPPED_AT" ? 1 : 0);
+  }
+});

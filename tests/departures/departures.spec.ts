@@ -417,8 +417,9 @@ test("Appearance follows device, persists overrides, and highlights only meaning
   assert.equal(await page.locator(".change-caution").count(), 1);
   await page.emulateMedia({ reducedMotion: "reduce" });
   assert.equal(await page.locator(".change-caution").evaluate(el => getComputedStyle(el).animationName), "none");
-  await page.waitForTimeout(12500);
-  assert.equal(await page.locator(".change-note").count(), 0);
+  await page.waitForTimeout(9000);
+  assert.ok(await page.locator(".change-note").count() >= 1);
+  await page.waitForFunction(() => document.querySelectorAll(".change-note").length === 0, null, { timeout: 6000 });
   await refresh.click(); await board.ready();
   assert.equal(await page.locator(".change-note").count(), 0);
 });

@@ -2,7 +2,19 @@
 
 A mobile-first installable web app (PWA) for departures at **L'Hospitalet de Llobregat (72305)**. Independent prototype; not affiliated with Renfe or Adif. It never claims to know a platform before the railway operator.
 
-**No Jev account is needed.** The MVP uses public Renfe feeds and an abstaining historical baseline. The supplied Firebase project is prepared locally; it is **not deployed**. See [Firebase readiness](docs/firebase.md) and [verification results](docs/verification.md).
+**No Jev account is needed.** The MVP uses public Renfe feeds and an abstaining historical baseline. The frontend is published at **https://viaradar.web.app/**; the API and collector run on a Windows PC through Tailscale Funnel. Firebase Hosting does not run the backend. See [deployment](docs/firebase.md) and [verification results](docs/verification.md).
+
+## Start here
+
+| Need | Read |
+| --- | --- |
+| Continue work without reconstructing earlier chats | [context.md](context.md) |
+| Understand modules, data, contracts and boundaries | [Architecture](docs/architecture.md) |
+| Understand predictions, measurement and the improvement plan | [Prediction measurement](docs/predictions.md) |
+| Assess reusable GitHub tools before adopting a model | [Prediction research](docs/prediction-research.md) |
+| Operate or recover the Windows server | [Self-hosting runbook](docs/self-hosting.md) |
+| Publish the frontend to the correct Firebase site | [Firebase deployment](docs/firebase.md) |
+| See what has actually been tested | [Verification](docs/verification.md) |
 
 ## Run locally
 
@@ -14,7 +26,7 @@ npm run import:gtfs
 npm run dev
 ```
 
-Open **http://127.0.0.1:5173**. The API runs on port 8787. The timetable importer downloads the official national ZIP, trims every CSV header/value, and stores only itineraries serving configured stations. It needs several hundred MB of transient memory. Import can take a minute or more.
+Open **http://127.0.0.1:5173**. The API runs on port 8787. On the existing host, the Windows watchdog already owns that port: do not start a second API. For frontend-only development use `npx vite --host 127.0.0.1`. For a clean local setup, remove the public `VITE_API_BASE_URL` override from your shell and `.env.local` so the dev proxy is used. The timetable importer downloads the official national ZIP, trims every CSV header/value, and stores only itineraries serving configured stations. It needs several hundred MB of transient memory. Import can take a minute or more.
 
 For the production build / PWA:
 
@@ -45,7 +57,7 @@ The board includes current Renfe GTFS-RT alerts only when their informed stop is
 
 Environment variables: `PORT` (8787), `HOST` (127.0.0.1), `DATA_DIR` (data), `STATION_IDS` (comma-separated, default 72305), `STATIC_URL` (official ZIP by default). Set `STATION_IDS` during **both import and server startup**, then restart. The present UI is deliberately Hospitalet-focused; the API supports configured additional stations. The server only binds loopback by default; public deployment needs HTTPS reverse proxy, request limits and monitoring.
 
-`VITE_API_BASE_URL` is an optional **build-time** HTTPS backend origin/path prefix, without `/api`; leave it unset for local same-origin operation. `ALLOWED_ORIGINS` is the backend's comma-separated browser CORS allowlist; its defaults are the two `buscando-la-via-h` Firebase Hosting origins. CORS is not authentication. No analytics or Firebase SDK is activated merely by saving the supplied web configuration. `npm run check:hosting` deliberately fails until a reachable production backend is configured.
+`VITE_API_BASE_URL` is an optional **build-time** HTTPS backend origin/path prefix, without `/api`; leave it unset for local same-origin operation. Vite reads `.env.local`, but the Node server and Hosting guard do not automatically load it. `ALLOWED_ORIGINS` replaces the backend's complete browser CORS allowlist when set. Defaults include both Firebase site names, localhost/127.0.0.1 on 5173 and 8787, and a legacy Vercel origin; see `server/origins.ts`. Vercel is not the intended deployment destination. CORS is not authentication. No analytics or Firebase SDK is activated merely by saving the supplied web configuration. `npm run check:hosting` fails unless a reachable public HTTPS backend is configured in the launching shell.
 
 Timetables are not downloaded automatically on startup. Re-run the importer regularly (daily recommended) and restart the service. Calendar validity controls results; an expired dataset cannot manufacture future trains. The current data is ignored if absent and an actionable setup message appears instead.
 
@@ -67,13 +79,13 @@ Static station/trip indexes are built once per loaded dataset rather than rescan
 
 SQLite uses WAL and stores deduplicated payloads (SHA-256), fetch time and source timestamp. Raw snapshots retain 7 days; observations retain 90 days, purged after successful collection. National feeds can consume substantial disk space (potentially GB/week); monitor the data directory. Back up or delete `data/` only while the server is stopped. No personal data or user locations are collected.
 
-API: `GET /api/health`, `/api/stations`, `/api/departures?stationId=72305`, `/api/history`. All use `Cache-Control: no-store`. The departures response includes a freshness/status object and only current, matching Renfe alerts. Every departure contains trip/service identifiers, line, destination, scheduled and expected times, cancellation flag, realtime timing flag, and a platform evidence object. Unmatched realtime trips are not guessed into the timetable. Destination falls back from trip headsign to the actual final static stop name, never a fabricated destination.
+API: `GET /api/health`, `/api/stations`, `/api/departures?stationId=72305`, `/api/history`, and `/api/predictions?stationId=72305` (prospective measurement, requires the updated backend). All use `Cache-Control: no-store`. See [API contracts](docs/architecture.md#api-contracts). Unmatched realtime trips are not guessed into the timetable. Destination falls back from trip headsign to the actual final static stop name, never a fabricated destination.
 
 ## Prediction roadmap
 
 The engine contract separates feature context from evidence observations. `historical-frequency-v1` is intentionally simple. Future Jev / XGBoost / LightGBM adapters should consume the same time-valid features and return an abstention when unsupported. No Jev SDK, API contract, access entitlement or model accuracy is invented here. Jev is early access; model confidence must not be assumed to be calibrated platform probability.
 
-Before enabling stronger predictions: collect verified outcomes, split evaluation by service day (never random snapshots), exclude future information, measure coverage, top-1 accuracy, Brier score/calibration and lead time, and compare against the historical baseline. Official data can arrive too late or never include a platform; a model cannot remove this information limit.
+The first improvement phase records prospective first-opportunity attempts and later published-platform evidence, without changing the predictor. Read [the exact metric definitions and continuation plan](docs/predictions.md) before interpreting the results. This does not create a historical accuracy result from existing training observations. Subsequent model comparisons must split by service day (never random snapshots), exclude future information, and report coverage and lead time alongside agreement. Calibration/Brier metrics are a future phase, not current capabilities. Official data can arrive too late or never include a platform; a model cannot remove this information limit.
 
 ## Sources (checked 22 September 2026)
 
@@ -88,4 +100,4 @@ Renfe datasets are offered under [CC BY 4.0](https://creativecommons.org/license
 
 ## Scope and limits
 
-This is a local runnable MVP, not a public production railway information service. No push notifications, user accounts, journey planner, crowdsourcing or actual trained ML model. No guarantee of advance platform allocation. It has no synthetic trains in live mode. Static import changes require restart; full production deployments should add atomic dataset refresh, structured metrics and supervised process restart.
+This is a publicly accessible beta backed by one PC, not an official or highly available railway information service. No push notifications, user accounts, journey planner, crowdsourcing or trained ML model. No guarantee of advance platform allocation or perfect predictions. It has no synthetic trains in live mode. The Windows watchdog supervises API availability, not feed quality; static import changes still require a restart. Real-device installation, load testing, automatic timetable refresh and disaster-recovery drills remain work to do.

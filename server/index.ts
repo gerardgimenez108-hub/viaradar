@@ -1,3 +1,4 @@
+import { measurePredictionBoard, predictionMetrics } from "./measurement.ts";
 import { createServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, extname } from "node:path";
@@ -18,7 +19,10 @@ async function tick() {
   collecting = true;
   try {
     await collect();
-    for (const station of stationIds) createBoard(data, station);
+    for (const station of stationIds) {
+      const now = Date.now();
+      measurePredictionBoard(db, createBoard(data, station, now), now);
+    }
   } catch (error) {
     console.error(error);
   } finally {
@@ -81,14 +85,15 @@ const server = createServer((req, res) => {
           rawRetentionDays: 7,
           observationRetentionDays: 90,
         };
-      else if (url.pathname === "/api/departures") {
+      else if (url.pathname === "/api/departures" || url.pathname === "/api/predictions") {
         const station = url.searchParams.get("stationId") || "72305";
         if (!stationIds.includes(station)) {
           res.writeHead(404);
           res.end(JSON.stringify({ error: "Station not configured" }));
           return;
         }
-        payload = createBoard(data, station);
+        payload = url.pathname === "/api/predictions"
+          ? predictionMetrics(db, station) : createBoard(data, station);
       } else {
         res.writeHead(404);
         payload = { error: "Not found" };

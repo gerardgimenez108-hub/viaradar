@@ -1,42 +1,55 @@
-# MVP verification — 24 September 2026
+# Verification — 27 September 2026
 
-**Local MVP verified. Not publicly deployed. Jev is not required or connected.**
+**Prospective measurement is implemented and active in the local/public PC-backed API. The predictor is unchanged.** This work unit has not been committed, pushed or deployed to Firebase. The preceding frontend release remains `41d27ef`, deployed to https://viaradar.web.app on 26 September. Backend activation is separate from a frontend release.
 
-## Automated checks
+## Checks actually executed
 
 | Check | Result |
 | --- | --- |
-| `npm test` | 19 passing tests; no failures |
-| `npm run typecheck` | Passed with strict TypeScript |
-| `npm run build` | Passed; production Vite assets generated |
-| `npm run test:browser` | 3 passing browser scenarios in headless Microsoft Edge |
-| `npm audit` | Zero reported vulnerabilities at verification time |
-| `npm run check:hosting` without a backend | Correctly blocked, exit 1; intentional safety guard |
+| `npm run build` | Passed: strict TypeScript and Vite build |
+| `npm test` | **35/35 passed**, including 8 dedicated measurement cases and collector/board integration |
+| `npm run test:browser` | **8/8 passed** in headless Edge against the local built app |
+| `git diff --check` | Passed before activation; line-ending warnings only |
+| Local `/api/health` after restart | `ok: true`, timetable loaded, both realtime sources healthy |
+| Public `/api/predictions?stationId=72305` | HTTP200, `Cache-Control: no-store`, CORS allows `https://viaradar.web.app` |
+| `/api/predictions?stationId=unknown` | HTTP404 |
+| Existing observation count | **204 before and after activation** |
+| Initial measurement state | `engines: []`, zero attempts/official markers at 00:57 Europe/Madrid; no eligible overnight trains |
 
-Tests cover service calendars and exceptions, after-midnight/DST times, exact-station platform evidence, mismatching service dates, stale/future timestamps, cancelled/skipped/no-data stops, downstream vehicles, historical deduplication and abstention, malformed feed structures, snapshot retention, and Firebase deployment prerequisites.
+The empty report is expected, not a test failure or an accuracy result. Prospective recording begins with future eligible collection ticks. Existing historical samples are preserved but not re-labelled as predictions made in the past.
 
-Browser tests cover published/estimated/unknown/cancelled states using isolated synthetic responses, 390px and 1440px layout overflow, line filtering, installation instructions, offline suppression of live claims, preservation of last-known cancellations, malformed API recovery, and first-install offline shell loading. JavaScript/CSS were precached, but live API responses were not.
+## Automated coverage
 
-## Live integration evidence
+- Independent service attempts; repeated ticks and metrics reads cannot multiply samples or rewrite the first prediction/abstention.
+- Later matching/mismatching stopped-at labels, frozen first resolution, strict same-time/future/stale rejection.
+- Previously known/withdrawn publications, overdue services, cancellations, missing labels, eligibility and report time windows.
+- Coverage versus agreement denominators, null before evaluated predictions, lead times, sample statistics, station cohorts and day count.
+- Additive repeated schema initialization and 90-day retention, without deleting existing observation history.
+- Existing schedule calendars/exceptions, midnight/DST, exact-station platform evidence, cancelled/skipped/no-data services, downstream vehicles, feed parsing and Hosting/CORS guards.
+- Browser: 320–1440px widths, light/dark mode, 44px main targets, enlarged text, platform states, notices and source text escaping, language/theme persistence, offline shell versus live evidence, and meaningful-change highlighting.
 
-- Official Renfe static GTFS import succeeded on 24 September at 17:03 UTC: 3,317 relevant trips and 79,720 itinerary stop-time rows after station filtering. These counts describe this particular feed revision, not permanent service totals.
-- Both official JSON realtime feeds returned fresh source timestamps through the Node collector. The live Hospitalet board returned roughly 30 upcoming departures during the check, including R1/R4 services. There is no demonstration data in the live API.
-- `/api/history` confirmed snapshots persisted in SQLite and a small number of station-bound platform observations. This is not enough to claim prediction accuracy or continuous multi-day collection.
-- API responses include `Cache-Control: no-store`. Both configured Firebase origins receive explicit CORS permission. An unrelated origin received 403; an unknown station 404; POST to the read-only API 405; malformed URL encoding 400. The server remained responsive afterward.
+Synthetic test data uses isolated databases or intercepted browser responses, never the live collector database. These checks are ordinary implementation tests; receipt-driven review is disabled/unmanaged.
 
-## Not verified or not implemented
+## Runtime activation and backup
 
-- Installation on physical iOS/Android devices; test after trusted HTTPS deployment.
-- A public backend, Firebase project permissions, deployment, billing, authentication or analytics. The supplied client configuration does not establish those capabilities.
-- Jev credentials or inference, trained XGBoost/LightGBM models, calibrated platform probabilities, or measured prediction lead time versus station announcements.
-- Production load, disaster recovery, full GTFS-RT extensions, arbitrary added trips absent from the static timetable, or differential feed merging.
+A consistent SQLite online backup was created using Node's SQLite backup API before restarting the verified ViaRadar child process. Its matching static timetable was copied alongside it:
 
-## Work units and reversibility
+`%LOCALAPPDATA%\ViaRadar\backups\before-measurement-2026-09-26T22-53-48-593Z\`
 
-The local MVP is self-contained in this directory, with generated operational data isolated under ignored `data/`. Back up that directory before removing or replacing runtime storage. Firebase preparation is a separate unit: `.firebaserc`, `firebase.json`, `config/firebase.web.json`, `scripts/check-hosting.mjs`, and `docs/firebase.md`. Removing those files and leaving `VITE_API_BASE_URL` unset restores local-only operation without deleting train history. No Git commit or remote artifact was created.
+The existing `ViaRadar Local Server` watchdog observed its child exit and restarted the updated API at **00:56:42 Europe/Madrid**. Its logs record this; no other Node services were stopped. The restarted process initialized the new tables and served the measurement endpoint locally and through Tailscale. A complete backup restoration drill was not performed.
 
-Receipt-driven review mode remains disabled/unmanaged; these are ordinary implementation tests, not an approval receipt.
+## Not demonstrated by these checks
+
+- Improved prediction accuracy: no replacement model was introduced and no prospective labels existed at activation.
+- Physical departure-platform truth, lead time versus station announcements, calibrated probabilities, or a 100% success guarantee.
+- GitHub candidate installation, training or performance. [Research](prediction-research.md) is documentary only.
+- Physical iOS/Android installation, production load, 24/7 uptime, automated timetable refresh, backup restoration, or cloud backend migration.
+- Source/platform coverage for every train. Missing data still produces abstention rather than invented evidence.
+
+## Earlier release evidence
+
+The 26 September mobile UI work passed 26 unit tests and 8 browser tests, was pushed as `41d27ef`, and was verified in Firebase with matching JS/CSS assets. Earlier documents incorrectly still described Firebase as un-deployed and Cloudflare as the active tunnel; this work unit corrects those stale runbooks.
 
 ## Next acceptance gate
 
-Collect enough independent, trustworthy platform outcomes to measure the baseline. Select a persistent HTTPS backend before authorizing Firebase Hosting deployment; the current guard intentionally prevents publishing a disconnected frontend.
+Observe real attempts and later labels across multiple operating dates, inspect coverage and label availability, then use [the measurement plan](predictions.md) to design a time-separated challenger experiment. Keep deployment status and this dated evidence record current when publishing the work unit.
