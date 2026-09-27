@@ -2,7 +2,7 @@
 
 **Production frontend: https://viaradar.web.app/**. Project ID: `buscando-la-via-h`. Hosting target and site: `viaradar`. Renaming the Firebase display name does not rename these IDs. Do not substitute the legacy Vercel deployment.
 
-The frontend was last published in the preceding work unit on 26 September 2026 (`41d27ef`). Check [verification](verification.md) for newer work and whether it has been deployed.
+The frontend was republished successfully on 27 September 2026 at about 23:26 Europe/Madrid from `029b7d5`, after the automatic ML work. Public assets and live browser data were verified. This release does not change the UI or activate a new passenger predictor; the Windows ML task is separately installed. See [verification](verification.md).
 
 ## What Firebase hosts
 

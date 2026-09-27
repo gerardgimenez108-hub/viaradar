@@ -70,11 +70,11 @@ Detener la tarea no prueba que su hijo terminó: comprobar el puerto. Cambiar Ty
 
 SQLite conserva snapshots 7 días y observaciones/mediciones 90 días. Vigilar tamaño de disco. Guardar copias fechadas fuera de Git y ensayar restauración en una carpeta aislada, nunca sobre la base activa. Una copia no es una recuperación verificada hasta probarla.
 
-## Diagnóstico rápido
-
-### Evaluación automática de modelos
+## Evaluación automática de modelos
 
 La tarea independiente **ViaRadar ML Experiments** se ejecuta al iniciar sesión y cada hora. Lee los datos que ya guarda el recolector, sin modificar SQLite ni sustituir el predictor público. Requiere el PC encendido y la sesión iniciada. Consultar `data/ml/status.json` para ver la última ejecución y `data/ml/report.json` para el resultado. `insufficient_data` significa que faltan datos para la comparación, no que el proceso haya fallado. Instalación, retención y desactivación en [experimentos ML](ml-experiments.md).
+
+## Diagnóstico rápido
 
 | Síntoma | Comprobar |
 | --- | --- |

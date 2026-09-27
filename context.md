@@ -60,6 +60,8 @@ Current predictor: `historical-frequency-v1`, grouping by station/line/destinati
 
 ## Next decision gate
 
+Latest release: `029b7d5` pushed to GitHub and Firebase site `viaradar` redeployed on 27 September at about 23:26 Europe/Madrid. The independent `ViaRadar ML Experiments` Windows task is installed at logon/hourly; first run succeeded with 175 checkpoints/89 labels/1 date (`insufficient_data`). The public page was verified connected with R1/R4 departures. 41 Python, 35 Node and 8 browser tests pass. No live predictor replacement or API restart. See [R1 audit](docs/r1-evidence-audit.md): only 5 R1 stopped-platform observations, so the missing R1 predictions are a documented evidence limitation, not fixed by the new models.
+
 Collect real prospective attempts/outcomes before claiming improved accuracy. Inspect missing labels, coverage, days represented and lead time. Only then compare a time/day-aware model against this frozen baseline using future service days; do not tune and evaluate on the same cases. Jev remains an optional later adapter with no promised advantage.
 
 [GitHub research](docs/prediction-research.md) led to an isolated Python experiment workspace in `ml/`: scikit-learn metrics, a CatBoost challenger, and River delayed-label replay. See [ML experiments](docs/ml-experiments.md) for setup, hourly Windows evaluation and report history. These are automatically evaluated offline experiments, not passenger-facing engines. No automatic promotion or API subprocess is added. Keep the live historical baseline unchanged until comparative evidence supports a separately approved rollout.

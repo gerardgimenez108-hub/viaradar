@@ -1,5 +1,13 @@
 # Verification — 27 September 2026
 
+## Latest publication — 23:26 Europe/Madrid
+
+**Commit `029b7d5` is pushed to GitHub `main`, and Firebase Hosting site `viaradar` has been deployed successfully.** Public https://viaradar.web.app returned HTTP 200 and its JS/CSS asset names matched the local build. Browser verification showed connected 20-second polling, R1/R4 trains and the existing historical R4 predictions. There is no UI redesign in this release.
+
+The independent Windows ML task completed successfully with 175 checkpoints/89 later labels over one date; it will evaluate hourly and at sign-in. CatBoost/River are not serving passenger predictions. No Node API restart was required. The deployed frontend and backend worker are separate publication steps.
+
+### Previous measurement release
+
 **Prospective measurement is implemented and active in the local/public PC-backed API. The predictor is unchanged.** This work unit is committed and pushed to GitHub as `800ed85`. It has **not** been deployed to Firebase. The preceding frontend release remains `41d27ef`, deployed to https://viaradar.web.app on 26 September. Backend activation is separate from a frontend release.
 
 ## Checks actually executed
@@ -19,7 +27,7 @@ Automatic execution does not mean a candidate is now serving users: this is an h
 
 ### Isolated ML workspace — later on 27 September
 
-The new `ml/` workspace is implemented locally, **not pushed or deployed** in this work unit. It does not replace the live predictor or require a server restart.
+At this earlier checkpoint, the new `ml/` workspace was implemented locally but not yet pushed or deployed. The latest publication above supersedes that release status. It does not replace the live predictor or require a server restart.
 
 | Check | Result |
 | --- | --- |

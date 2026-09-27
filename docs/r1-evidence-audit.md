@@ -4,7 +4,7 @@ Audit: **27 September 2026, 23:20 Europe/Madrid**. No line-specific exclusion or
 
 ## Stored evidence
 
-Read-only SQLite inspection found **5 R1 observations**, compared with **288 R4 observations**. R1 groups were Blanes (1 service, 1 date), Mataro (2 services, 2 dates), and Macanet-Massanes (2 services, 2 dates). The live baseline requires at least 20 earlier independent services over 3 earlier dates **per station, line and destination**, then at least 80% modal share. No R1 group qualifies even before excluding today's rows.
+Read-only SQLite inspection found **5 R1 observations**, compared with **288 R4 observations**. R1 groups were Blanes (1 service, 1 date), Mataró (2 services, 2 dates), and Maçanet-Massanes (2 services, 2 dates). The live baseline requires at least 20 earlier independent services over 3 earlier dates **per station, line and destination**, then at least 80% modal share. No R1 group qualifies even before excluding today's rows.
 
 Today's prospective cohort contained R1: 69 attempts, 0 predictions, 0 later qualifying labels; R4: 106 attempts, 90 predictions, 89 later labels. These are dated counts, not fixed system totals. All R1 abstentions had `insufficient_history`.
 
