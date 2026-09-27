@@ -4,6 +4,37 @@
 
 ## Checks actually executed
 
+### Automatic ML evaluation — 27 September, 23:22 Europe/Madrid
+
+Installed the independent limited-user task **ViaRadar ML Experiments**, running at logon and hourly. Its first scheduled execution completed successfully (Windows result 0) and wrote an atomic report/status: **175 checkpoints, 1 service date, 89 later labels**, `insufficient_data`. The next trigger was 00:22 on 28 September. No live predictor or collector restart was needed.
+
+- Python: **41 tests passed**, including 12 runner tests for overlap, timeout/error preservation, atomic publication, alias protection and bounded history cleanup. Four informational single-label matrix warnings remain.
+- Node: **35 tests passed**; strict TypeScript/Vite build passed.
+- Browser: **8 tests passed** against the local built app.
+- Hosting preflight passed against the public API and configured Firebase origins.
+- Firebase CLI identity verified for the configured project; publication results are recorded separately below when complete.
+- R1 coverage investigation is documented in [R1 evidence audit](r1-evidence-audit.md). No thresholds or training label definitions were weakened.
+
+Automatic execution does not mean a candidate is now serving users: this is an hourly offline replay/evaluation pipeline, without promotion.
+
+### Isolated ML workspace — later on 27 September
+
+The new `ml/` workspace is implemented locally, **not pushed or deployed** in this work unit. It does not replace the live predictor or require a server restart.
+
+| Check | Result |
+| --- | --- |
+| Isolated Python 3.11 installation / `pip check` | Passed; scikit-learn 1.9.1, CatBoost 1.2.10, River 0.26.1; full pins in `ml/requirements.txt` |
+| `python -m pytest ml/tests -q` | **29 passed**; four informational scikit-learn warnings for one-class confusion-matrix test subsets |
+| Actual CatBoost fitting / River learning | Passed on isolated synthetic fixtures, including deterministic replay |
+| Read-only live experiment | **67 independent checkpoints, 1 service date, 15 later labels**, zero invalid rows and duplicates; correctly returns `insufficient_data` |
+| Existing `npm test` / `npm run typecheck` | **35/35 passed** / passed |
+| Local health | Timetable loaded, both realtime sources healthy; no backend restart |
+| `git diff --check` | Passed; line-ending warnings only |
+
+The live smoke exposed compact GTFS `YYYYMMDD` dates, now normalized and covered by loader tests. Other tests cover delayed label availability, time splits, duplicate services, same-day/nonmonotonic-date abstention, constant features, unseen contexts, missing labels and read-only database/output protection. This is not proof of improved real-world accuracy. Browser tests and Firebase deployment were not rerun for this Python/docs-only change.
+
+### Earlier prospective measurement activation
+
 | Check | Result |
 | --- | --- |
 | `npm run build` | Passed: strict TypeScript and Vite build |
@@ -42,7 +73,7 @@ The existing `ViaRadar Local Server` watchdog observed its child exit and restar
 
 - Improved prediction accuracy: no replacement model was introduced and no prospective labels existed at activation.
 - Physical departure-platform truth, lead time versus station announcements, calibrated probabilities, or a 100% success guarantee.
-- GitHub candidate installation, training or performance. [Research](prediction-research.md) is documentary only.
+- Improved real-world candidate performance. Installation and synthetic training now pass in the isolated [ML workspace](ml-experiments.md), but the real prospective dataset still spans only one service date.
 - Physical iOS/Android installation, production load, 24/7 uptime, automated timetable refresh, backup restoration, or cloud backend migration.
 - Source/platform coverage for every train. Missing data still produces abstention rather than invented evidence.
 

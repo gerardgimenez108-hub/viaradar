@@ -1,6 +1,6 @@
 # Reusable prediction tools — GitHub research
 
-Research snapshot: **27 September 2026**. Documentary review only; no package installed, trained or benchmarked on ViaRadar data. In this bounded search, no ready-made, validated Renfe/L'Hospitalet platform predictor was found. Delay prediction or railway simulation projects are not evidence of platform-allocation accuracy.
+Research snapshot: **27 September 2026**. The initial documentary review below led to the [isolated ML experiment workspace](ml-experiments.md). Installation and synthetic tests do not establish better performance on ViaRadar data. In this bounded search, no ready-made, validated Renfe/L'Hospitalet platform predictor was found. Delay prediction or railway simulation projects are not evidence of platform-allocation accuracy.
 
 ## Shortlist
 
@@ -14,7 +14,7 @@ Recheck releases, licences and dependencies before installation or redistributio
 
 ## Recommendation
 
-Use the current [measurement phase](predictions.md) first. **scikit-learn for an isolated evaluation workspace and a small CatBoost model as the first challenger** is a reasonable experiment, not an adoption decision or a claim of improvement. River is deferred until there is evidence that incremental adaptation is needed.
+Use the current [measurement phase](predictions.md) first. **scikit-learn for an isolated evaluation workspace and a small CatBoost model as the first challenger** is a reasonable experiment, not a production adoption decision or a claim of improvement. River is now implemented as an offline delayed-label replay experiment at the user's request; continuous production learning remains deferred until evidence and recovery design justify it.
 
 CatBoost's [categorical feature support](https://catboost.ai/docs/en/features/categorical-features) matches the shape of potential inputs. Whether it beats the existing modal-frequency engine is unknown. With little representative data, the simpler baseline may be better.
 

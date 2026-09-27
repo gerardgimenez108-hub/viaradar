@@ -8,3 +8,7 @@ data/
 .firebase/
 firebase-debug.log*
 test-results/
+.venv-ml/
+__pycache__/
+.pytest_cache/
+catboost_info/

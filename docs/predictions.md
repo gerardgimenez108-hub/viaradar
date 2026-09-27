@@ -82,9 +82,11 @@ Response metadata: `stationId`, ISO `generatedAt`, `retentionDays`, `checkpointP
 
 ## Continue in this order
 
+For the current R1 coverage limitation, see the [dated evidence audit](r1-evidence-audit.md). R1 moving-status platform assignments and stopped-publication training labels must remain distinct; automatically running new models does not solve missing labels.
+
 1. **Collect and inspect.** Check dated reports across operating days: attempts, coverage, labelled fraction, unresolved cases, date diversity and lead time. No predetermined sample count guarantees reliability.
 2. **Audit evidence.** Inspect mismatches and changed/late/missing labels. Decide whether first-opportunity evaluation matches passenger needs or add explicit 30/10/5-minute checkpoints under a new policy version. Do not rewrite the old cohort.
-3. **Try a richer baseline in shadow mode.** Time band, weekday/holiday, recent history, and verified delay/disruption context are candidates, not implemented features. Small groups need fallback and abstention; extra features are not automatically better.
+3. **Try richer models offline.** The [ML workspace](ml-experiments.md) implements CatBoost and River experiments using frozen station/line/destination, weekday, scheduled time and delay. Holidays, recency weighting and disruption features are not implemented. These candidates do not replace the live baseline; extra features are not automatically better.
 4. **Compare on later days.** Fix settings on development days, then test on untouched future service dates with identical eligibility/outcomes and lead horizons. Keep v1 as baseline. Report coverage, label availability and uncertainty alongside agreement; promote only after demonstrated improvement.
 5. **Optional adapters.** Assess XGBoost/LightGBM or Jev only with explicit access/cost/latency/fallback and local performance checks. Calibration/Brier metrics are later work. No model promises perfect predictions.
 

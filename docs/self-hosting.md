@@ -72,6 +72,10 @@ SQLite conserva snapshots 7 días y observaciones/mediciones 90 días. Vigilar t
 
 ## Diagnóstico rápido
 
+### Evaluación automática de modelos
+
+La tarea independiente **ViaRadar ML Experiments** se ejecuta al iniciar sesión y cada hora. Lee los datos que ya guarda el recolector, sin modificar SQLite ni sustituir el predictor público. Requiere el PC encendido y la sesión iniciada. Consultar `data/ml/status.json` para ver la última ejecución y `data/ml/report.json` para el resultado. `insufficient_data` significa que faltan datos para la comparación, no que el proceso haya fallado. Instalación, retención y desactivación en [experimentos ML](ml-experiments.md).
+
 | Síntoma | Comprobar |
 | --- | --- |
 | Local falla | Tarea, proceso, puerto, logs y Node |
