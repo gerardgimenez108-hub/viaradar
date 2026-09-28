@@ -146,3 +146,7 @@ After the first continuity release, the audit found and fixed five more boundary
 - static GTFS is refreshed with last-known-good atomic replacement and explicit health status.
 
 Verification before this follow-up publication: **67 Node tests, 41 Python tests, 12 browser tests, and production build passed**. Four existing sklearn single-class confusion-matrix warnings remain expected test-fixture warnings. API smoke checks and a real retained-feed replay remain documented above.
+
+## Follow-up publication completed — 29 September 2026, 23:25 CEST
+
+Commit `ab7cc41` is on GitHub `main` and Firebase Hosting target `viaradar` is deployed. Public assets `index-BrFSYqO8.js` and `index-N5EzuWgf.css` returned HTTP200 and the service worker cache was refreshed. The restarted watchdog-owned backend reports fresh vehicle/trip feeds, `timetable.usable=true`, `timetable.stale=false`, active service for 28–29 September, and static coverage through 4 October. The public browser then showed connected R1/R4 departures and 20-second refresh status.
