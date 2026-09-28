@@ -34,7 +34,7 @@ export function measurePredictionBoard(db: DatabaseSync, board: Board, now = Dat
   const bothHealthy = vehicleHealthy && freshSource("trip_updates");
   for (const row of board.departures) {
     const identity = [row.serviceDate, row.tripId, station];
-    if (row.platform.kind === "official") {
+    if (row.platform.kind === "official" || row.lastPublishedPlatform) {
       db.prepare("INSERT OR IGNORE INTO prediction_official_seen VALUES(?,?,?,?)").run(...identity, now);
     }
     if (row.cancelled) {
@@ -44,7 +44,7 @@ export function measurePredictionBoard(db: DatabaseSync, board: Board, now = Dat
     }
     const scheduled = Date.parse(row.scheduledAt);
     const expected = Date.parse(row.expectedAt);
-    if (!bothHealthy || row.platform.kind === "official" || !Number.isFinite(scheduled) ||
+    if (!bothHealthy || row.platform.kind === "official" || row.lastPublishedPlatform || !Number.isFinite(scheduled) ||
       !Number.isFinite(expected) || scheduled <= now || expected <= now) continue;
     const known = db.prepare(`SELECT 1 FROM prediction_official_seen WHERE service_date=? AND trip_id=? AND station_id=?
       UNION ALL SELECT 1 FROM observations WHERE service_date=? AND trip_id=? AND station_id=? LIMIT 1`)

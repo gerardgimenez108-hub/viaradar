@@ -1,6 +1,6 @@
 # ViaRadar — continuation context
 
-Updated: **27 September 2026**. This is the handoff entry point, not a substitute for checking running services and current code.
+Updated: **28 September 2026**. This is the handoff entry point, not a substitute for checking running services and current code.
 
 ## Product and non-negotiables
 
@@ -67,3 +67,9 @@ Collect real prospective attempts/outcomes before claiming improved accuracy. In
 [GitHub research](docs/prediction-research.md) led to an isolated Python experiment workspace in `ml/`: scikit-learn metrics, a CatBoost challenger, and River delayed-label replay. See [ML experiments](docs/ml-experiments.md) for setup, hourly Windows evaluation and report history. These are automatically evaluated offline experiments, not passenger-facing engines. No automatic promotion or API subprocess is added. Keep the live historical baseline unchanged until comparative evidence supports a separately approved rollout.
 
 Keep this file brief and update it whenever deployment topology, evaluation policy or the next work unit changes. Put detailed contracts and runbooks in `docs/`.
+
+## Active correction — 28 September 2026
+
+Independent assignment collection is now active, including platforms published before `STOPPED_AT`. Recovered snapshots preserve assignments for R1 without changing old observations or retrospective prediction scores. `/api/assignments?stationId=72305` exposes evidence coverage; at 22:52 local it reported 159 R1 outbound assigned services. This number is not the count of qualified training labels and does not automatically enable the live predictor.
+
+See [assignment evidence](docs/assignment-evidence.md), [the verified Maçanet 15:48 case](docs/hospitalet-2026-09-28.md), and [verification](docs/verification.md). Passenger-facing continuity and inconsistent-delay protection are implemented and passed tests; see verification for actual publication status. The historical predictor and experimental ML promotion policy remain unchanged.

@@ -10,7 +10,9 @@ import type { StaticData } from "./static.ts";
 import { incidentsForStation } from "./incidents.ts";
 import { activeService, gtfsTime, serviceDays } from "./time.ts";
 import { isFresh, liveFeed, sourceStatus } from "./realtime.ts";
+import { reliableGenericDelay } from "./timing.ts";
 import { db } from "./store.ts";
+import { lastPublishedPlatform } from "./platform-continuity.ts";
 import {
   historicalEngine,
   unknownPlatform,
@@ -130,7 +132,7 @@ export function createBoard(
   const vehicles = new Map(
     vehicleFeed?.entity
       .filter((e) => e.vehicle?.trip?.tripId)
-      .map((e) => [e.vehicle!.trip!.tripId!, e.vehicle!]) || [],
+      .map((e) => [e.vehicle!.trip!.tripId!, { ...e.vehicle!, vehicle: { ...e.vehicle!.vehicle, id: e.vehicle!.vehicle?.id ?? e.id } }]) || [],
   );
   const updates = new Map(
     updateFeed?.entity
@@ -218,8 +220,12 @@ export function createBoard(
         stopUpdate?.scheduleRelationship === "NO_DATA" ||
         stopUpdate?.scheduleRelationship === 2;
       const departure = noData || cancelled ? undefined : stopUpdate?.departure;
+      const genericTiming = reliableGenericDelay(update, byTrip.get(stop.trip_id) ?? [], date);
       const delay =
-        noData || cancelled ? undefined : (departure?.delay ?? update?.delay);
+        noData || cancelled ? undefined : (departure?.delay ?? genericTiming.delay);
+      if (!noData && !cancelled && genericTiming.rejection &&
+          departure?.time === undefined && departure?.delay === undefined)
+        board.warnings.push(`${stop.trip_id}: ignored contradictory trip delay; using scheduled time, not a live estimate.`);
       const expected = departure?.time
         ? Number(departure.time) * 1000
         : delay !== undefined
@@ -271,6 +277,9 @@ export function createBoard(
         );
       if (cancelled) platform = unknownPlatform("Service cancelled", "cancelled");
       const result: Departure = {
+        lastPublishedPlatform: !cancelled && platform.kind !== "official" && vehicle &&
+          Number(vehicleFeed?.header.timestamp) * 1000 <= now
+          ? lastPublishedPlatform(db, vehicle, stationId, date, uniqueDate, now) : undefined,
         destinationUnavailable: destination === "Destination unavailable",
         tripId: stop.trip_id!,
         serviceDate: date,

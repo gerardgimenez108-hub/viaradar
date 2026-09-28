@@ -90,6 +90,45 @@ const launch = () =>
     headless: true,
   });
 
+test("Previous publication is timestamped, neutral, and hidden when expired or offline", { timeout: 30000 }, async t => {
+  const browser = await launch(); t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "es-ES", serviceWorkers: "block", viewport: { width: 375, height: 812 } });
+  const page = await context.newPage(); const board = new DeparturesPage(page);
+  const data = fixture(); data.departures = [data.departures[2]];
+  const departure = data.departures[0];
+  await page.route("**/api/departures?*", route => route.fulfill({ json: data }));
+  await board.goto(); await board.rows.first().waitFor();
+  departure.platform = { ...data.departures[0].platform, kind: "official", value: "13", expiresAt: new Date(Date.now() + 90000).toISOString() };
+  const refresh = page.getByRole("button", { name: "Actualizar salidas" });
+  await refresh.click(); await board.ready();
+  assert.equal(await page.locator(".change-positive").count(), 1);
+  departure.platform = { kind: "prediction", value: "14", confidence: 0.9, sampleCount: 30, evidence: "Synthetic history" };
+  departure.lastPublishedPlatform = { value: "13", observedAt: new Date(Date.now() - 7 * 60000).toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString() };
+  await refresh.click(); await board.ready();
+  assert.equal(await page.locator(".platform.last-published strong").innerText(), "13");
+  assert.match(await page.locator(".platform.last-published").innerText(), /Última vía publicada.*A las.*Ahora sin confirmar/s);
+  assert.equal(await page.locator(".change-positive,.platform.official,.platform.prediction").count(), 0);
+  await page.getByText("¿De dónde sale esta vía?", { exact: true }).click();
+  assert.match(await page.locator("details.evidence").innerText(), /No es una predicción ni una confirmación actual/);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.screenshot({ path: "test-results/last-published-mobile.png", fullPage: true });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.emulateMedia({ colorScheme: width === 320 ? "dark" : "light" });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({ path: `test-results/last-published-${width}.png`, fullPage: true });
+  }
+  departure.lastPublishedPlatform.expiresAt = new Date(Date.now() - 1).toISOString();
+  await refresh.click(); await board.ready();
+  assert.equal(await page.locator(".last-published").count(), 0);
+  departure.lastPublishedPlatform.expiresAt = new Date(Date.now() + 60000).toISOString();
+  await refresh.click(); await board.ready();
+  assert.equal(await page.locator(".last-published").count(), 1);
+  await context.setOffline(true);
+  await page.waitForFunction(() => document.querySelectorAll(".last-published").length === 0);
+  assert.equal(await page.locator(".platform strong").innerText(), "—");
+});
+
 test("Mobile departure board prioritizes trains without shrinking touch controls", { timeout: 45000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());

@@ -60,6 +60,12 @@ export function isBoard(value: unknown): value is Board {
     )
       return false;
     const platform = row.platform;
+    const last = row.lastPublishedPlatform;
+    if (last !== undefined && (!record(last) || typeof last.value !== "string" ||
+      !/^\d+[A-Za-z]?$/.test(last.value) || !timestamp(last.observedAt) || !timestamp(last.expiresAt) ||
+      Date.parse(String(last.observedAt)) > Date.parse(String(value.generatedAt)) ||
+      Date.parse(String(last.expiresAt)) <= Date.parse(String(last.observedAt)) ||
+      Date.parse(String(last.expiresAt)) - Date.parse(String(last.observedAt)) > 900000)) return false;
     return (
       ["official", "prediction", "unknown"].includes(String(platform.kind)) &&
       (platform.value === null || typeof platform.value === "string") &&

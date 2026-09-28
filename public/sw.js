@@ -1,4 +1,4 @@
-const CACHE = "viaradar-shell-v5-settings-gear";
+const CACHE = "viaradar-shell-v6-assignment-continuity";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {

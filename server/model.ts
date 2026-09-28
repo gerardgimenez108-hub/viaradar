@@ -66,7 +66,13 @@ export interface Platform {
   sampleCount: number;
   evidence: string;
 }
+export interface LastPublishedPlatform {
+  value: string;
+  observedAt: string;
+  expiresAt: string;
+}
 export interface Departure {
+  lastPublishedPlatform?: LastPublishedPlatform;
   destinationUnavailable?: boolean;
   tripId: string;
   serviceDate: string;

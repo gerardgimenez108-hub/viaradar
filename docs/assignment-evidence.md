@@ -41,3 +41,9 @@ The retained raw feed is finite. Recovery cannot reconstruct snapshots already r
 ## Next model decision
 
 Assess assignment stability, withdrawals/missing follow-up, timestamp quality and later stopped evidence by line/destination. If an assignment-based model is evaluated later, give it a new outcome policy and compare it separately. Do not mix its results with stopped-publication accuracy or relax the existing thresholds just to make the board display a guess.
+
+## Passenger-facing continuity
+
+A fresh same-service vehicle still targeting the station can expose an additive `lastPublishedPlatform` with value, original observation time and expiry. This is separate from `platform.kind`; the UI displays it neutrally as last published, currently unconfirmed, ahead of a historical estimate. It is limited to 15 minutes from the publication and 90 seconds from current vehicle evidence, whichever expires first. It requires the same vehicle identity and resolved service date, and disappears on cancellation, downstream movement, missing/stale source, or expiry. New official evidence takes precedence.
+
+Retained evidence never creates an official training label. Measurement marks it as a previously known publication, preventing a later artificial prediction attempt. The module can be removed together with its additive field, UI and tests without removing captured history; restore the previous measurement condition only when removing this display feature entirely.

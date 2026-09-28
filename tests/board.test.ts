@@ -182,3 +182,35 @@ test("Collector measurement labels only later STOPPED_AT, while board reads alon
     assert.equal(predictionMetrics(db, "72305", later).engines[0]?.labelled, status === "STOPPED_AT" ? 1 : 0);
   }
 });
+
+test("Contradictory downstream delay cannot hide an on-time Hospitalet service with a published platform", () => {
+  const caseNow = Date.parse("2026-09-28T13:42:06Z");
+  const tripId = "5169L25651R1";
+  const caseData: StaticData = {
+    ...data,
+    importedAt: "2026-09-24T17:03:05Z",
+    trips: [{ trip_id: tripId, service_id: "service", route_id: "route", trip_headsign: "Maçanet-Massanes" }],
+    stopTimes: [
+      { trip_id: tripId, stop_id: "72305", stop_sequence: "1", arrival_time: "15:48:00", departure_time: "15:48:00" },
+      { trip_id: tripId, stop_id: "71801", stop_sequence: "2", arrival_time: "15:54:00", departure_time: "15:55:00" },
+      { trip_id: tripId, stop_id: "end", stop_sequence: "3", arrival_time: "17:00:00", departure_time: "17:00:00" },
+    ],
+    calendar: [{ service_id: "service", start_date: "20260928", end_date: "20260928", monday: "1" }],
+  };
+  const update: TripUpdate = {
+    trip: { tripId, scheduleRelationship: "SCHEDULED" }, delay: 13080,
+    stopTimeUpdate: [{ stopId: "71801", arrival: { time: "1790603640", delay: 13080 } }],
+  };
+  feeds(update, { trip: { tripId }, timestamp: caseNow / 1000 - 20, stopId: "72305", currentStatus: "INCOMING_AT", vehicle: { label: "R1-PLATF.(13)" } });
+  for (const source of sources.values()) source.feed!.header.timestamp = caseNow / 1000;
+  const result = createBoard(caseData, "72305", caseNow);
+  assert.equal(result.departures.length, 1);
+  assert.equal(result.departures[0]?.expectedAt, "2026-09-28T13:48:00.000Z");
+  assert.equal(result.departures[0]?.realtime, false);
+  assert.equal(result.departures[0]?.platform.value, "13");
+  assert.match(result.warnings.join(" "), /contradictory trip delay/);
+  update.stopTimeUpdate!.push({ stopId: "72305", departure: { time: caseNow / 1000 + 900, delay: 13080 } });
+  const direct = createBoard(caseData, "72305", caseNow);
+  assert.equal(direct.departures[0]?.expectedAt, new Date(caseNow + 900000).toISOString());
+  assert.equal(direct.departures[0]?.realtime, true);
+});

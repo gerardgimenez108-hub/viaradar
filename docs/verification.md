@@ -92,3 +92,24 @@ The 26 September mobile UI work passed 26 unit tests and 8 browser tests, was pu
 ## Next acceptance gate
 
 Observe real attempts and later labels across multiple operating dates, inspect coverage and label availability, then use [the measurement plan](predictions.md) to design a time-separated challenger experiment. Keep deployment status and this dated evidence record current when publishing the work unit.
+
+## Assignment capture recovery — 28 September 2026
+
+Independent `assignment_events` collection was activated in the Windows API. A pinned SQLite read-transaction backup and rehearsal copy are retained at `%LOCALAPPDATA%\ViaRadar\backups\assignment-capture-consistent-20260928-190411\`. The earlier zero-byte attempt `before-assignment-capture-20260928-190209` is not a usable backup.
+
+- Rehearsal: 17,172 retained snapshots, zero invalid snapshots after correcting valid header-only feed handling, 21,587 deduplicated events.
+- Initial identified fresh outbound assigned services: **153 R1**, **375 R4**. These are assignment-bearing services, not confirmed departures or prediction successes.
+- Legacy tables were compared exactly between pristine/rehearsal copies: 341 observations and 398 prediction attempts unchanged. Production merge verified unchanged legacy tables within its transaction; repeating the insert added zero rows.
+- Delta recovery added another 1,747 events from 656 snapshots without invalid snapshots.
+- Capture work unit checks: **43 Node tests, 41 Python tests, 8 browser tests passed**, TypeScript/Vite build passed. Python emitted four existing single-label metric warnings.
+- Verified owned API child restart through the existing watchdog; local health reported both feeds fresh and `/api/assignments` returned recovered aggregates.
+
+The public predictor and ML target policy are unchanged. The retained assignment history is a separate evidence source, not automatic proof of improved prediction accuracy. See [the actual 15:48 case](hospitalet-2026-09-28.md).
+
+## Continuity and timing regression checks — 28 September 2026
+
+Final checks after the passenger-facing fix: **56 Node tests, 41 Python tests, 9 browser tests passed**; TypeScript/Vite production build passed. Browser fixtures covered neutral retained platform13 overriding an unrelated historical estimate, original publication time, no green confirmation flash, expiry and offline removal. Inspected 320px dark and 390px light screenshots, with no horizontal overflow. Actual retained-snapshot replay reproduced Maçanet13/Mataró11; see the [case report](hospitalet-2026-09-28.md).
+
+The additive last-publication field does not alter confirmed training labels, and excludes previously published services from new prediction attempts. The contradictory-delay guard has no arbitrary large-delay cap and preserves explicit station absolute times. Public API `/api/assignments` returned HTTP200, correct Firebase origin CORS and `no-store` before this activation.
+
+Rollback boundary: remove last-publication display/module/optional field and its measurement-known marker together; keep independent captured history. The timing helper and its board fallback can be reverted independently. No prior observations or scores were rewritten by either correction. Receipt-driven review remains disabled/unmanaged.

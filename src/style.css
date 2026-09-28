@@ -990,3 +990,7 @@ dialog .close {
     scroll-behavior:auto!important
   }
 }
+
+/* A previous publication is contextual information, never a green confirmation. */
+.platform.last-published { background:var(--subtle); color:var(--ink); border:1px dashed var(--muted); }
+.platform.last-published small,.platform.last-published span { color:var(--muted); }
