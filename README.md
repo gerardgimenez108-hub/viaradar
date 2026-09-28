@@ -11,6 +11,7 @@ A mobile-first installable web app (PWA) for departures at **L'Hospitalet de Llo
 | Continue work without reconstructing earlier chats | [context.md](context.md) |
 | Understand modules, data, contracts and boundaries | [Architecture](docs/architecture.md) |
 | Understand predictions, measurement and the improvement plan | [Prediction measurement](docs/predictions.md) |
+| Understand R1 assignment capture versus stopped-platform labels | [Assignment evidence](docs/assignment-evidence.md) |
 | Assess reusable GitHub tools before adopting a model | [Prediction research](docs/prediction-research.md) |
 | Run isolated scikit-learn, CatBoost and River experiments | [ML experiments](docs/ml-experiments.md) |
 | Operate or recover the Windows server | [Self-hosting runbook](docs/self-hosting.md) |

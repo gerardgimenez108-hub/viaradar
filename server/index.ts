@@ -1,10 +1,11 @@
 import { measurePredictionBoard, predictionMetrics } from "./measurement.ts";
+import { captureAssignments, assignmentMetrics } from "./assignments.ts";
 import { createServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { loadStatic } from "./static.ts";
 import { createBoard } from "./board.ts";
-import { collect, sourceStatus } from "./realtime.ts";
+import { collect, sourceStatus, sources } from "./realtime.ts";
 import { db } from "./store.ts";
 import { configuredOrigins } from "./origins.ts";
 const data = loadStatic();
@@ -19,6 +20,10 @@ async function tick() {
   collecting = true;
   try {
     await collect();
+    const vehicles = sources.get("vehicle_positions");
+    if (vehicles?.feed && vehicles.status.fetchedAt) {
+      captureAssignments(db, vehicles.feed, data, stationIds, Date.parse(vehicles.status.fetchedAt));
+    }
     for (const station of stationIds) {
       const now = Date.now();
       measurePredictionBoard(db, createBoard(data, station, now), now);
@@ -85,14 +90,14 @@ const server = createServer((req, res) => {
           rawRetentionDays: 7,
           observationRetentionDays: 90,
         };
-      else if (url.pathname === "/api/departures" || url.pathname === "/api/predictions") {
+      else if (["/api/departures", "/api/predictions", "/api/assignments"].includes(url.pathname)) {
         const station = url.searchParams.get("stationId") || "72305";
         if (!stationIds.includes(station)) {
           res.writeHead(404);
           res.end(JSON.stringify({ error: "Station not configured" }));
           return;
         }
-        payload = url.pathname === "/api/predictions"
+        payload = url.pathname === "/api/assignments" ? assignmentMetrics(db, station) : url.pathname === "/api/predictions"
           ? predictionMetrics(db, station) : createBoard(data, station);
       } else {
         res.writeHead(404);

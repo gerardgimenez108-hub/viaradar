@@ -27,8 +27,12 @@ These raw snapshot counts contain repeated sightings, not independent training e
 
 Open SQLite with `mode=ro`. Select `snapshots` where `kind='vehicle_positions'` and `fetched_at >= 1790478000000`. Parse vehicle entities, join `trip.tripId` to static trips/routes and require route short name R1 and `stopId='72305'`. Use the highest numeric stop sequence to identify whether the trip terminates at 72305. Count `PLATF.` in the vehicle label by status and terminal/nonterminal category. Count distinct trips separately from entity sightings. The snapshot retention window is finite, so later reproduction requires an archived database snapshot.
 
-## Next evidence work — not implemented
+## Capture correction — 28 September
 
-Keep existing thresholds and the stopped-publication evaluation cohort unchanged. Investigate a separate, versioned **published assignment** stream using earlier moving-status assignments. Measure assignment stability and later confirmation/missing confirmation before deciding whether it can train an R1 candidate. Never silently relabel this evidence as a confirmed physical departure or mix it into the current outcome cohort.
+The separate [assignment-event stream](assignment-evidence.md) now preserves moving publications, missing-platform messages and stopped publications outside the departure-board filters. Retained snapshots can be recovered explicitly and idempotently, with provenance and unresolved dates preserved. See [verification](verification.md) for activation and measured recovery counts.
+
+## Next model work — not implemented
+
+Keep existing thresholds and the stopped-publication evaluation cohort unchanged. Use the separate **published assignment** stream to measure stability and later confirmation/missing confirmation before deciding whether it can train an R1 candidate. Never silently relabel this evidence as a confirmed physical departure or mix it into the current outcome cohort.
 
 CatBoost and River cannot repair missing trustworthy labels merely by being more sophisticated. Their automatic reports consume the current cohort; they do not remove this R1 limitation.

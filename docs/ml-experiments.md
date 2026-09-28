@@ -73,6 +73,8 @@ River's state is rebuilt by replaying eligible checkpoints on each run. This dem
 
 ## Before promoting a candidate
 
+The separate [assignment capture](assignment-evidence.md) preserves previously discarded R1 assignments. The current ML loader intentionally still reads `prediction_attempts`, not `assignment_events`: recovered assignments are not automatically new scored predictions or stopped-platform outcomes. An assignment-target experiment needs its own versioned evidence/evaluation policy before adoption.
+
 Collect multiple representative days, inspect label availability and errors by line/destination, fix parameters on development data, then evaluate untouched later days. Repeatedly tuning against the same report makes that report development evidence, not a final test. Minimum sample guards are execution safeguards, never a statistical guarantee. Keep `historical-frequency-v1` serving passengers until a separate rollout is justified and approved.
 
 See [measurement contracts](predictions.md), [research and licences](prediction-research.md) and [executed checks](verification.md).

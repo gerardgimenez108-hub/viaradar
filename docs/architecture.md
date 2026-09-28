@@ -68,6 +68,7 @@ All endpoints are GET-only (plus OPTIONS), return JSON with `Cache-Control: no-s
 | `/api/departures?stationId=72305` | `station`, `generatedAt`, `staticImportedAt`, `sources`, `incidents`, `departures`, `warnings` |
 | `/api/history` | Counts/first-last times for snapshots, observation count, retention settings; not prediction accuracy |
 | `/api/predictions?stationId=72305` | Prospective aggregate measurement; inspect cohort and denominators in [predictions.md](predictions.md) |
+| `/api/assignments?stationId=72305` | Separate assignment-event evidence diagnostics by line; not prediction accuracy or physical departure confirmation |
 
 A departure contains `tripId`, `serviceDate`, `line`, `destination`, `scheduledAt`, `expectedAt`, `cancelled`, `realtime`, and a `platform` evidence object. `platform.kind` is `official`, `prediction` or `unknown`. `confidence` in the legacy prediction object is a historical share; it is not an independently validated success probability. `sampleCount` counts historical services, not evaluation outcomes. Official evidence expires.
 
