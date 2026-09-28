@@ -214,3 +214,85 @@ test("Contradictory downstream delay cannot hide an on-time Hospitalet service w
   assert.equal(direct.departures[0]?.expectedAt, new Date(caseNow + 900000).toISOString());
   assert.equal(direct.departures[0]?.realtime, true);
 });
+
+test("Sequence-only stop updates honor skipped, no-data and absolute departure times", () => {
+  for (const relationship of ["SKIPPED", 1]) {
+    feeds({ trip: { tripId: "trip" }, stopTimeUpdate: [{ stopSequence: 1, scheduleRelationship: relationship }] });
+    assert.equal(board().length, 0);
+  }
+  for (const relationship of ["NO_DATA", 2]) {
+    feeds({ trip: { tripId: "trip" }, delay: 600,
+      stopTimeUpdate: [{ stopSequence: 1, scheduleRelationship: relationship }] });
+    assert.equal(board()[0]?.realtime, false);
+    assert.equal(board()[0]?.expectedAt, board()[0]?.scheduledAt);
+  }
+  feeds({ trip: { tripId: "trip" }, stopTimeUpdate: [{ stopSequence: 1, departure: { time: now / 1000 + 1200 } }] });
+  assert.equal(board()[0]?.expectedAt, "2026-09-22T10:20:00.000Z");
+});
+
+test("Contradictory stop selectors and ambiguous loop identifiers cannot apply a stop update", () => {
+  for (const selector of [{ stopId: "end", stopSequence: 1 }, { stopId: "72305", stopSequence: 2 }]) {
+    feeds({ trip: { tripId: "trip" }, stopTimeUpdate: [{ ...selector, scheduleRelationship: "SKIPPED" }] });
+    assert.equal(board().length, 1);
+  }
+  const looping = { ...data, stopTimes: [data.stopTimes[0]!,
+    { ...data.stopTimes[0]!, stop_sequence: "2", departure_time: "12:40:00" },
+    { ...data.stopTimes[1]!, stop_sequence: "3", departure_time: "13:00:00" }] };
+  feeds({ trip: { tripId: "trip" }, stopTimeUpdate: [{ stopId: "72305", scheduleRelationship: "SKIPPED" }] });
+  assert.equal(createBoard(looping, "72305", now).departures.length, 2);
+  feeds({ trip: { tripId: "trip" }, stopTimeUpdate: [{ stopSequence: 1, scheduleRelationship: "SKIPPED" }] });
+  const rows = createBoard(looping, "72305", now).departures;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.scheduledAt, "2026-09-22T10:40:00.000Z");
+});
+
+test("A valid live delay can retain a departure scheduled more than an hour ago", () => {
+  const delayed = { ...data, stopTimes: data.stopTimes.map(stop => stop.stop_id === "72305"
+    ? { ...stop, departure_time: "10:50:00" } : stop) };
+  const update: TripUpdate = { trip: { tripId: "trip", startDate: "20260922" }, delay: 4800 };
+  feeds(update);
+  const rows = createBoard(delayed, "72305", now).departures;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.expectedAt, "2026-09-22T10:10:00.000Z");
+  feeds({ ...update, timestamp: now / 1000 - 91 });
+  assert.equal(createBoard(delayed, "72305", now).departures.length, 0);
+  feeds({ ...update, trip: { tripId: "trip", startDate: "20260921" } });
+  assert.equal(createBoard(delayed, "72305", now).departures.length, 0);
+});
+
+test("Fresh incoming or stopped evidence keeps overdue trains visible without inventing a live time", () => {
+  const delayed = { ...data, stopTimes: data.stopTimes.map(stop => stop.stop_id === "72305"
+    ? { ...stop, departure_time: "10:50:00" } : stop) };
+  const vehicle: Vehicle = { trip: { tripId: "trip", startDate: "20260922" }, timestamp: now / 1000,
+    stopId: "72305", currentStatus: "INCOMING_AT", vehicle: { label: "R1-PLATF.(13)" } };
+  for (const currentStatus of ["INCOMING_AT", "STOPPED_AT", 0, 1]) {
+    feeds(undefined, { ...vehicle, currentStatus });
+    const rows = createBoard(delayed, "72305", now).departures;
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.platform.value, "13");
+    assert.equal(rows[0]?.realtime, false);
+    assert.equal(rows[0]?.expectedAt, rows[0]?.scheduledAt);
+  }
+  for (const invalid of [
+    { ...vehicle, timestamp: now / 1000 - 91 },
+    { ...vehicle, trip: { tripId: "trip", startDate: "20260921" } },
+    { ...vehicle, stopId: "end" },
+    { ...vehicle, currentStatus: "IN_TRANSIT_TO" },
+  ]) {
+    feeds(undefined, invalid);
+    assert.equal(createBoard(delayed, "72305", now).departures.length, 0);
+  }
+  feeds({ trip: { tripId: "trip", scheduleRelationship: "CANCELED" } }, vehicle);
+  assert.equal(createBoard(delayed, "72305", now).departures.length, 0);
+});
+
+test("Undated realtime cannot revive yesterday's occurrence of a repeating trip", () => {
+  const repeated = { ...data, calendar: [{ service_id: "service", start_date: "20260921",
+    end_date: "20260923", monday: "1", tuesday: "1", wednesday: "1" }] };
+  feeds({ trip: { tripId: "trip" }, stopTimeUpdate: [{ stopSequence: 1, departure: { time: now / 1000 + 600 } }] },
+    { trip: { tripId: "trip" }, timestamp: now / 1000, stopId: "72305", currentStatus: "STOPPED_AT",
+      vehicle: { label: "R1-PLATF.(13)" } });
+  const rows = createBoard(repeated, "72305", now).departures;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.serviceDate, "20260922");
+});

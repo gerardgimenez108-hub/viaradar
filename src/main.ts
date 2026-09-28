@@ -36,8 +36,11 @@ function trackChanges(previous:Board|null,next:Board):void {
   let change:Change|undefined;
   const base={values:{},until:Date.now()+12000};
   if(d.cancelled&&!before.cancelled)change={...base,key:'cancelChange',tone:'alert'};
-  else if(!d.cancelled&&d.platform.kind==='official'&&d.platform.value&&d.platform.value!==before.platform.value){
-   change={...base,key:before.platform.kind==='official'&&before.platform.value?'changedPlatform':'newPlatform',tone:before.platform.kind==='official'&&before.platform.value?'caution':'positive',values:{from:before.platform.value||'—',to:d.platform.value}};
+  else if(!d.cancelled&&d.platform.kind==='official'&&d.platform.value&&(before.platform.kind!=='official'||d.platform.value!==before.platform.value)){
+   const previousPublication=before.platform.kind==='official'?before.platform.value:
+    before.lastPublishedPlatform&&Date.parse(before.lastPublishedPlatform.expiresAt)>Date.now()?before.lastPublishedPlatform.value:null;
+   const changed=!!previousPublication&&previousPublication!==d.platform.value;
+   change={...base,key:changed?'changedPlatform':'newPlatform',tone:changed?'caution':'positive',values:{from:previousPublication||'—',to:d.platform.value}};
   }else if(!d.cancelled&&d.realtime&&before.realtime&&Math.abs(Date.parse(d.expectedAt)-Date.parse(before.expectedAt))>=60000)change={...base,key:'delayChanged',tone:'caution'};
   if(change)changes.set(serviceKey(d),change);
  }
@@ -59,18 +62,20 @@ function evidence(platform:Platform,cancelled:boolean):string {
  if(platform.kind==='prediction')return t('predictionEvidence',{percent:percent(platform.confidence||0),count:number(platform.sampleCount)});
  return t(platform.evidenceCode==='variable_history'?'variableEvidence':'unknownEvidence');
 }
-function row(original:Departure,stale:boolean):string {
- const d=stale?{...original,expectedAt:original.scheduledAt,realtime:false}:original;
- const platform=stale?{...d.platform,kind:'unknown',value:null}:d.platform;
- const lastPublished=!stale&&!d.cancelled&&platform.kind!=='official'&&d.lastPublishedPlatform&&Date.now()<Date.parse(d.lastPublishedPlatform.expiresAt)?d.lastPublishedPlatform:undefined;
+function row(original:Departure,stale:boolean,timingStale:boolean,vehicleStale:boolean):string {
+ const d=timingStale?{...original,expectedAt:original.scheduledAt,realtime:false}:original;
+ const publicationExpired=d.platform.kind==='official'&&!!d.platform.expiresAt&&Date.now()>=Date.parse(d.platform.expiresAt);
+ const platform=stale||d.platform.kind==='official'&&(vehicleStale||publicationExpired)?{...d.platform,kind:'unknown',value:null}:d.platform;
+ const lastPublished=!stale&&!vehicleStale&&!d.cancelled&&platform.kind!=='official'&&d.lastPublishedPlatform&&Date.now()<Date.parse(d.lastPublishedPlatform.expiresAt)?d.lastPublishedPlatform:undefined;
  const delay=Math.round((Date.parse(d.expectedAt)-Date.parse(d.scheduledAt))/60000);
- const timing=d.cancelled?t(stale?'previouslyCancelled':'cancelled'):d.realtime?(delay>0?t('liveDelay',{minutes:number(delay)}):t('liveEstimate')):t('scheduled');
- const detail=d.cancelled?t(stale?'previousCancellation':'doNotBoard'):t(d.realtime?'updatedTime':'timetableTime');
+ const timing=d.cancelled?t(timingStale?'previouslyCancelled':'cancelled'):d.realtime?(delay>0?t('liveDelay',{minutes:number(delay)}):t('liveEstimate')):t('scheduled');
+ const detail=d.cancelled?t(timingStale?'previousCancellation':'doNotBoard'):t(d.realtime?'updatedTime':'timetableTime');
  const change=stale?undefined:changes.get(serviceKey(d));
- const activeChange=!lastPublished&&change&&change.until>Date.now()?change:undefined;
+ const invalidChange=change&&(change.key==='delayChanged'||change.key==='cancelChange'?timingStale:vehicleStale||publicationExpired);
+ const activeChange=!lastPublished&&!invalidChange&&change&&change.until>Date.now()?change:undefined;
  const minutes=Math.ceil((Date.parse(d.expectedAt)-Date.now())/60000);
  const countdown=!stale&&!d.cancelled&&minutes>=0?`<span class="countdown">${minutes===0?t('due'):t('inMinutes',{minutes:number(minutes)})}</span>`:'';
- return `<article style="animation-delay: -${activeChange?(Date.now()-(activeChange.until-12000))/1000:0}s" class="departure ${activeChange?'change-'+activeChange.tone:''} ${d.cancelled?'cancelled':''}"><div class="departure-time">${countdown}<strong>${time(d.expectedAt)}</strong><small>${timing}</small>${delay>0?`<s>${time(d.scheduledAt)}</s>`:''}</div><div class="destination"><span class="line">${escape(d.line)}</span><h3>${escape(d.destinationUnavailable?t('unknownDestination'):d.destination)}</h3><small>${detail}</small></div><div class="platform ${lastPublished?'last-published':platform.kind}"><span class="platform-label">${t("platformLabel")}</span><strong>${lastPublished?escape(lastPublished.value):platform.value?escape(platform.value):'—'}</strong><small>${t(lastPublished?'lastPublished':platform.kind==='official'?'publishedRenfe':platform.kind==='prediction'?'historicalEstimate':'notPublished')}</small>${lastPublished?`<span>${escape(t('lastPublishedTime',{time:time(lastPublished.observedAt)}))}</span><span>${t('unconfirmedNow')}</span>`:''}${!lastPublished&&platform.kind==='prediction'?`<span>${t('share',{percent:percent(platform.confidence||0),count:number(platform.sampleCount)})}</span>`:''}</div>${activeChange?`<p class="change-note">${escape(t(activeChange.key,activeChange.values))}</p>`:''}<details class="evidence" data-service="${escape(`${d.serviceDate}:${d.tripId}`)}"><summary>${t('sourceDetails')}</summary><p>${escape(stale?t('staleEvidence'):lastPublished?t('lastPublishedEvidence',{time:stamp(lastPublished.observedAt)}):evidence(d.platform,d.cancelled))}</p><p>${t('service')} ${escape(d.tripId)} · ${escape(d.serviceDate)}</p></details></article>`;
+ return `<article style="animation-delay: -${activeChange?(Date.now()-(activeChange.until-12000))/1000:0}s" class="departure ${activeChange?'change-'+activeChange.tone:''} ${d.cancelled?'cancelled':''}"><div class="departure-time">${countdown}<strong>${time(d.expectedAt)}</strong><small>${timing}</small>${delay>0?`<s>${time(d.scheduledAt)}</s>`:''}</div><div class="destination"><span class="line">${escape(d.line)}</span><h3>${escape(d.destinationUnavailable?t('unknownDestination'):d.destination)}</h3><small>${detail}</small></div><div class="platform ${lastPublished?'last-published':platform.kind}"><span class="platform-label">${t("platformLabel")}</span><strong>${lastPublished?escape(lastPublished.value):platform.value?escape(platform.value):'—'}</strong><small>${t(lastPublished?'lastPublished':platform.kind==='official'?'publishedRenfe':platform.kind==='prediction'?'historicalEstimate':'notPublished')}</small>${lastPublished?`<span>${escape(t('lastPublishedTime',{time:time(lastPublished.observedAt)}))}</span><span>${t('unconfirmedNow')}</span>`:''}${!lastPublished&&platform.kind==='prediction'?`<span>${t('share',{percent:percent(platform.confidence||0),count:number(platform.sampleCount)})}</span>`:''}</div>${activeChange?`<p class="change-note">${escape(t(activeChange.key,activeChange.values))}</p>`:''}<details class="evidence" data-service="${escape(`${d.serviceDate}:${d.tripId}`)}"><summary>${t('sourceDetails')}</summary><p>${escape(stale||publicationExpired||(vehicleStale&&d.platform.kind==='official')||(timingStale&&d.cancelled)?t('staleEvidence'):lastPublished?t('lastPublishedEvidence',{time:stamp(lastPublished.observedAt)}):evidence(d.platform,d.cancelled))}</p><p>${t('service')} ${escape(d.tripId)} · ${escape(d.serviceDate)}</p></details></article>`;
 }
 function preserveDetails():Set<string> {return new Set(Array.from(app.querySelectorAll<HTMLDetailsElement>('details.evidence[open]')).map(el=>el.dataset.service!));}
 function renderRows(html:string,opened=preserveDetails()):void {
@@ -103,18 +108,20 @@ function incidentPeriods(incident:Incident):string[] {
   return t('incidentTimeUnknown');
  });
 }
-function renderIncidents(incidents:IncidentBoard):void {
+function renderIncidents(incidents:IncidentBoard,stale:boolean):void {
  const area=app.querySelector<HTMLDivElement>('#incident-area');
  if(!area)return;
- if(incidents.status!=='healthy'){
-  const message=t(incidents.status==='stale'?'incidentsStale':'incidentsUnavailable');
-  area.innerHTML=`<p class="incident-unavailable" role="status">${escape(message)}${incidents.feedTimestamp?` · ${escape(t('feedTime',{time:stamp(incidents.feedTimestamp)}))}`:''}</p>`;
+ const details=app.querySelector<HTMLDivElement>('#incident-details');
+ if(stale||incidents.status!=='healthy'||!incidents.feedTimestamp||Date.now()-Date.parse(incidents.feedTimestamp)>90000||Date.parse(incidents.feedTimestamp)-Date.now()>30000){
+  const message=t(stale||incidents.status==='unavailable'?'incidentsUnavailable':'incidentsStale');
+  const notice=`<p class="incident-unavailable" role="status">${escape(message)}${incidents.feedTimestamp?` · ${escape(t('feedTime',{time:stamp(incidents.feedTimestamp)}))}`:''}</p>`;
+  area.innerHTML=notice;
+  if(details)details.innerHTML=notice;
   return;
  }
- if(!incidents.items.length){area.replaceChildren();return;}
+ if(!incidents.items.length){area.replaceChildren();details?.replaceChildren();app.querySelector<HTMLDialogElement>('#incident-dialog')?.close();return;}
  const count=incidents.items.length;
  area.innerHTML=`<button type="button" id="incident-trigger" class="incident-trigger" aria-haspopup="dialog" aria-label="${escape(t('renfeAlerts',{count}))}"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span>${escape(t('renfeAlertsLabel'))}</span><span class="incident-count" aria-hidden="true">${count}</span></button>`;
- const details=app.querySelector<HTMLDivElement>('#incident-details');
  if(details)details.innerHTML=incidents.items.map(incident=>{
   const affected=[...(incident.stopIds.length?[t('incidentStop')]:[]),...(incident.lines.length?[t('incidentLines',{lines:incident.lines.join(', ')})]:[])].map(escape).join(' · ');
   return `<article class="incident-card"><p class="incident-message">${escape(incidentMessage(incident))}</p><p class="incident-meta">${affected}</p><p class="incident-meta">${incidentPeriods(incident).map(escape).join('<br>')}</p></article>`;
@@ -126,15 +133,18 @@ function render():void {
   if(failed){status.className='connection warning';status.textContent=t('cannotReach');renderRows(`<div class="empty"><h3>${t('unavailable')}</h3><p>${t('retry')}</p></div>`);}
   return;
  }
- const stale=failed||!navigator.onLine||Date.now()-Date.parse(board.generatedAt)>90000||board.sources.some(source=>source.healthy&&source.feedTimestamp&&Date.now()-Date.parse(source.feedTimestamp)>90000);
- const healthy=!stale&&board.sources.every(s=>s.healthy);
+ const stale=failed||!navigator.onLine||Date.now()-Date.parse(board.generatedAt)>90000;
+ const sourceFresh=(kind:string)=>!stale&&board!.sources.some(source=>source.kind===kind&&source.healthy&&source.feedTimestamp&&Date.now()-Date.parse(source.feedTimestamp)<=90000&&Date.now()-Date.parse(source.feedTimestamp)>=-30000);
+ const timingStale=!sourceFresh('trip_updates');
+ const vehicleStale=!sourceFresh('vehicle_positions');
+ const healthy=!stale&&!timingStale&&!vehicleStale;
  status.className=`connection ${healthy?'good':'warning'}`;
  status.textContent=t(stale?'offlineStatus':healthy?'liveStatus':'limitedStatus');
- renderIncidents(board.incidents);
+ renderIncidents(board.incidents,stale);
  const rows=board.departures.filter(d=>!line||d.line===line);
- renderRows(rows.length?rows.map(d=>row(d,stale||(d.platform.kind==='official'&&!!d.platform.expiresAt&&Date.now()>Date.parse(d.platform.expiresAt)))).join(''):`<div class="empty"><h3>${t(line?'emptyLine':'empty')}</h3><p>${t(board.staticImportedAt?'emptyBody':'missingTimetable')}</p><p>${t('noInvented')}</p></div>`);
+ renderRows(rows.length?rows.map(d=>row(d,stale,timingStale,vehicleStale)).join(''):`<div class="empty"><h3>${t(line?'emptyLine':'empty')}</h3><p>${t(board.staticImportedAt?'emptyBody':'missingTimetable')}</p><p>${t('noInvented')}</p></div>`);
  document.querySelector('#updated')!.textContent=t('lastChecked',{time:time(board.generatedAt)})+(stale?t('outdated'):'');
- document.querySelector('#sources')!.innerHTML=board.sources.map(s=>`<p><strong>${t(s.kind==='vehicle_positions'?'vehicles':s.kind==='trip_updates'?'updates':'source')}</strong> · ${t(s.healthy&&!stale?'connected':'sourceUnavailable')}<br><small>${s.feedTimestamp?t('feedTime',{time:stamp(s.feedTimestamp)}):t('noFeed')}${s.error?` · ${t('feedError')}`:''}</small></p>`).join('')+`<p>${t('imported',{time:board.staticImportedAt?stamp(board.staticImportedAt):t('notImported')})}</p>`;
+ document.querySelector('#sources')!.innerHTML=board.sources.map(s=>`<p><strong>${t(s.kind==='vehicle_positions'?'vehicles':s.kind==='trip_updates'?'updates':'source')}</strong> · ${t(sourceFresh(s.kind)?'connected':'sourceUnavailable')}<br><small>${s.feedTimestamp?t('feedTime',{time:stamp(s.feedTimestamp)}):t('noFeed')}${s.error?` · ${t('feedError')}`:''}</small></p>`).join('')+`<p>${t('imported',{time:board.staticImportedAt?stamp(board.staticImportedAt):t('notImported')})}</p>`;
 }
 function renderShell():void {
  const opened=preserveDetails();

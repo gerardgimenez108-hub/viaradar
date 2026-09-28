@@ -90,6 +90,67 @@ const launch = () =>
     headless: true,
   });
 
+test("Platform expiry cannot erase fresh timing, and source freshness is independent", { timeout: 30000 }, async t => {
+  const browser = await launch(); t.after(() => browser.close());
+  const page = await browser.newPage({ locale: "en-US", serviceWorkers: "block" });
+  const data = fixture(); data.departures = [data.departures[0]];
+  data.departures[0].platform.expiresAt = new Date(Date.now() - 1000).toISOString();
+  await page.route("**/api/departures?*", route => route.fulfill({ json: data }));
+  const board = new DeparturesPage(page); await board.goto(); await board.rows.first().waitFor();
+  assert.equal(await page.locator(".platform.official").count(), 0);
+  assert.match(await page.locator(".departure-time").innerText(), /\+5 min · live/);
+  data.sources[0].feedTimestamp = new Date(Date.now() - 120000).toISOString();
+  await board.refresh.click(); await board.ready();
+  assert.match(await page.locator(".departure-time").innerText(), /\+5 min · live/);
+  data.sources[0].feedTimestamp = new Date().toISOString();
+  data.departures[0].platform.expiresAt = new Date(Date.now() + 90000).toISOString();
+  data.sources[1].healthy = false;
+  await board.refresh.click(); await board.ready();
+  assert.equal(await page.locator(".platform.official").count(), 1);
+  assert.doesNotMatch(await page.locator(".departure-time").innerText(), /min · live|Live estimate/);
+});
+
+test("Official confirmation highlights a prediction and retained-track changes use caution", { timeout: 30000 }, async t => {
+  const browser = await launch(); t.after(() => browser.close());
+  const page = await browser.newPage({ locale: "en-US", serviceWorkers: "block" });
+  const data = fixture(); data.departures = [data.departures[1]];
+  await page.route("**/api/departures?*", route => route.fulfill({ json: data }));
+  const board = new DeparturesPage(page); await board.goto(); await board.rows.first().waitFor();
+  data.departures[0].platform = { ...fixture().departures[0].platform, value: "7" };
+  await board.refresh.click(); await board.ready();
+  assert.equal(await page.locator(".change-positive").count(), 1);
+  data.departures[0].platform = { ...fixture().departures[2].platform };
+  data.departures[0].lastPublishedPlatform = { value: "7", observedAt: new Date(Date.now() - 60000).toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString() };
+  await board.refresh.click(); await board.ready();
+  data.departures[0].platform = { ...fixture().departures[0].platform, value: "11" };
+  delete data.departures[0].lastPublishedPlatform;
+  await board.refresh.click(); await board.ready();
+  assert.equal(await page.locator(".change-caution").count(), 1);
+  assert.match(await page.locator(".change-note").innerText(), /7 → 11/);
+  data.departures[0].platform.expiresAt = new Date(Date.now() - 1).toISOString();
+  await board.refresh.click(); await board.ready();
+  assert.equal(await page.locator(".change-positive,.change-caution,.platform.official").count(), 0);
+  assert.match(await page.locator(".departure-time").innerText(), /\+5 min · live/);
+});
+
+test("Open notices stop presenting cached messages when offline or their source expires", { timeout: 30000 }, async t => {
+  const browser = await launch(); t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "en-US", serviceWorkers: "block" });
+  const page = await context.newPage();
+  const data = fixture([{ id: "stale-notice", translations: [{ text: "Synthetic current disruption" }], stopIds: ["72305"], lines: ["R1"], activePeriods: [] }]);
+  await page.route("**/api/departures?*", route => route.fulfill({ json: data }));
+  const board = new DeparturesPage(page); await board.goto(); await board.rows.first().waitFor();
+  await page.locator("#incident-trigger").click();
+  await context.setOffline(true);
+  await page.waitForFunction(() => document.querySelector("#incident-details")?.textContent?.includes("temporarily unavailable"));
+  assert.doesNotMatch(await page.locator("#incident-details").innerText(), /Synthetic current disruption/);
+  data.incidents.status = "stale"; data.incidents.items = [];
+  await context.setOffline(false);
+  await page.waitForFunction(() => document.querySelector("#incident-details")?.textContent?.includes("out of date"));
+  assert.equal(await page.locator("#incident-trigger").count(), 0);
+  assert.doesNotMatch(await page.locator("#incident-details").innerText(), /Synthetic current disruption/);
+});
+
 test("Previous publication is timestamped, neutral, and hidden when expired or offline", { timeout: 30000 }, async t => {
   const browser = await launch(); t.after(() => browser.close());
   const context = await browser.newContext({ locale: "es-ES", serviceWorkers: "block", viewport: { width: 375, height: 812 } });
@@ -317,7 +378,7 @@ test("Renfe alerts open as accessible localized details and render source text s
   await page.getByRole("button", { name: "Close service information" }).click();
   testBoard.incidents = { status: "stale", fetchedAt: null, feedTimestamp: new Date(Date.now() - 120000).toISOString(), error: null, items: [] };
   await page.getByRole("button", { name: "Refresh departures" }).click();
-  await page.getByText("Renfe notices are out of date", { exact: false }).waitFor();
+  await page.locator("#incident-area").getByText("Renfe notices are out of date", { exact: false }).waitFor();
   assert.equal(await page.locator("#incident-trigger").count(), 0);
   await context.close();
 });

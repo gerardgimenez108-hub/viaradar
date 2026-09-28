@@ -113,3 +113,36 @@ Final checks after the passenger-facing fix: **56 Node tests, 41 Python tests, 9
 The additive last-publication field does not alter confirmed training labels, and excludes previously published services from new prediction attempts. The contradictory-delay guard has no arbitrary large-delay cap and preserves explicit station absolute times. Public API `/api/assignments` returned HTTP200, correct Firebase origin CORS and `no-store` before this activation.
 
 Rollback boundary: remove last-publication display/module/optional field and its measurement-known marker together; keep independent captured history. The timing helper and its board fallback can be reverted independently. No prior observations or scores were rewritten by either correction. Receipt-driven review remains disabled/unmanaged.
+
+## Initial publication — 28 September, 23:08 CEST
+
+Commits `f197a94` (capture) and `e537022` (continuity/timing) were pushed to GitHub main. Watchdog restarted the verified owned API child at 23:05:59; public departures returned HTTP200 with fresh feeds and correct Firebase CORS. Firebase target `viaradar`, project `buscando-la-via-h`, deployed successfully. Public JS `index-Dnd3fS5G.js`, CSS `index-N5EzuWgf.css` and service worker v6 matched local build. Browser inspection of https://viaradar.web.app/ showed connected R1/R4 departures. Further user-requested audit findings are being addressed separately; these checks do not assert that all possible faults are eliminated.
+
+## Broader functional audit — 28 September
+
+The follow-up audit reproduced and is correcting these independent failure modes:
+
+| Boundary | Reproduced defect | Required regression |
+| --- | --- | --- |
+| Timetable → realtime join | The preliminary one-hour schedule cutoff removed a fresh, still-present service delayed 80 minutes. An overdue incoming train could disappear before arrival. | Fresh same-service station evidence retains the row; stale, downstream and wrong-date evidence cannot. |
+| GTFS stop matching | Valid sequence-only stop updates were ignored, including `SKIPPED` and `NO_DATA`. | Match an unambiguous stop sequence or ID; reject contradictory selectors. |
+| UI freshness | An expired platform invalidated independently fresh departure timing. | Expire platform certainty without resetting a still-valid delay. |
+| Change cues | Prediction13→official13 had no publication cue; retained13→official11 looked like a new green publication. | Highlight new confirmation; emphasize a changed known platform in amber. |
+| Notices | An already-open notice dialog retained old current-looking text after source failure/offline. | Remove or clearly invalidate stale notice details, not only its trigger. |
+| Timetable lifecycle | Static data was loaded only once; current calendar coverage ends 4 October. | Bounded automatic refresh, last-known-good retention and explicit status. |
+
+Operational smoke checks on the running API passed: health/departures200; unknown station404 for departures/assignments; POST405; localhost and127.0.0.1 origin200; disallowed origin403; authorized preflight204. The server watchdog is running. The ML task last completed successfully at22:23 with413prospective services over2dates and152labels, correctly reporting insufficient evaluation data; it has not promoted a model.
+
+These checks cannot prove physical departure, correctness of station announcements, or correctness of every upstream message. Fresh Renfe status is source evidence, not independent observation of a train. Final publication evidence for the follow-up corrections belongs below, after testing.
+
+## Follow-up audit corrections — 29 September 2026
+
+After the first continuity release, the audit found and fixed five more boundary defects:
+
+- fresh same-service incoming/stopped evidence now keeps an overdue train visible instead of treating the schedule cutoff as proof of departure;
+- valid sequence-only `StopTimeUpdate` records now match, while contradictory ID/sequence pairs and ambiguous loop stops are rejected;
+- undated realtime is bound to the actual inferred service date, preventing yesterday's repeated trip from being revived;
+- platform expiry/source freshness no longer resets an independently fresh delay or cancellation time; change cues distinguish a first official confirmation from a changed previously published platform, and stale/offline notices invalidate open details;
+- static GTFS is refreshed with last-known-good atomic replacement and explicit health status.
+
+Verification before this follow-up publication: **67 Node tests, 41 Python tests, 12 browser tests, and production build passed**. Four existing sklearn single-class confusion-matrix warnings remain expected test-fixture warnings. API smoke checks and a real retained-feed replay remain documented above.

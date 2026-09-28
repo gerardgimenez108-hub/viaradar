@@ -163,7 +163,6 @@ export function createBoard(
       );
       if (
         !Number.isFinite(scheduled) ||
-        scheduled < now - 3600000 ||
         scheduled > now + 4 * 3600000
       )
         continue;
@@ -173,14 +172,17 @@ export function createBoard(
         trip.trip_headsign ||
         stops.get(terminals.get(stop.trip_id!)?.stop_id || "")?.stop_name ||
         "Destination unavailable";
-      const uniqueDate =
+      const nearbyDates =
         dates.filter(
           (d) =>
             Math.abs(
               gtfsTime(d, stop.departure_time || stop.arrival_time!) - now,
             ) <
             4 * 3600000,
-        ).length === 1;
+        );
+      // Undated realtime belongs only to the uniquely inferred service date,
+      // not to every occurrence of this repeating trip in the search window.
+      const uniqueDate = nearbyDates.length === 1 && nearbyDates[0] === date;
       const matches = (descriptor: TripDescriptor | undefined) =>
         descriptor?.startDate ? descriptor.startDate === date : uniqueDate;
       const vehicle = vehicles.get(stop.trip_id!);
@@ -192,10 +194,11 @@ export function createBoard(
           ? rawUpdate
           : undefined;
       const stopUpdate = update?.stopTimeUpdate?.find(
-        (s) =>
-          s.stopId === stationId &&
-          (!s.stopSequence ||
-            Number(s.stopSequence) === Number(stop.stop_sequence)),
+        (s) => s.stopSequence !== undefined
+          ? Number(s.stopSequence) === Number(stop.stop_sequence) &&
+            (s.stopId === undefined || s.stopId === stationId)
+          : s.stopId === stationId &&
+            (byTrip.get(stop.trip_id) ?? []).filter(row => row.stop_id === stationId).length === 1,
       );
       if (
         stopUpdate?.scheduleRelationship === "SKIPPED" ||
@@ -233,12 +236,13 @@ export function createBoard(
           : scheduled;
       // A timetable cutoff is not evidence that a delayed train has departed.
       // Only fresh, same-service vehicle evidence can keep an overdue row visible.
-      const stoppedHere = !cancelled && vehicle?.stopId === stationId &&
+      const presentOrIncoming = !cancelled && vehicle?.stopId === stationId &&
         isFresh(vehicle.timestamp, now) && matches(vehicle.trip) &&
-        (vehicle.currentStatus === "STOPPED_AT" || vehicle.currentStatus === 1);
+        (vehicle.currentStatus === "STOPPED_AT" || vehicle.currentStatus === 1 ||
+          vehicle.currentStatus === "INCOMING_AT" || vehicle.currentStatus === 0);
       if (
         !Number.isFinite(expected) ||
-        (expected < now - 60000 && !stoppedHere) ||
+        (expected < now - 60000 && !presentOrIncoming) ||
         expected > now + 3 * 3600000
       )
         continue;

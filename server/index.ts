@@ -4,15 +4,25 @@ import { createServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { loadStatic } from "./static.ts";
+import { createStaticRefresher } from "./static-refresh.ts";
 import { createBoard } from "./board.ts";
 import { collect, sourceStatus, sources } from "./realtime.ts";
 import { db } from "./store.ts";
 import { configuredOrigins } from "./origins.ts";
-const data = loadStatic();
+let data = loadStatic();
 const stationIds = (process.env.STATION_IDS || "72305")
   .split(",")
   .map((id) => id.trim())
   .filter(Boolean);
+const refresher = createStaticRefresher({
+  path: resolve(process.env.DATA_DIR || "data", "static.json"),
+  stations: stationIds,
+  initial: data,
+  url: process.env.STATIC_URL,
+  onUpdate: (updated) => { data = updated; console.log("Timetable refreshed", updated.importedAt); },
+});
+void refresher.check();
+const refreshTimer = setInterval(() => void refresher.check(), 60 * 60 * 1000);
 const allowedOrigins = configuredOrigins(process.env.ALLOWED_ORIGINS);
 let collecting = false;
 async function tick() {
@@ -68,8 +78,9 @@ const server = createServer((req, res) => {
       let payload: unknown;
       if (url.pathname === "/api/health")
         payload = {
-          ok: true,
+          ok: !!data && refresher.status().usable,
           timetableLoaded: !!data,
+          timetable: refresher.status(),
           sources: sourceStatus(),
         };
       else if (url.pathname === "/api/stations")
@@ -164,6 +175,7 @@ server.listen(
 );
 function shutdown() {
   clearInterval(timer);
+  clearInterval(refreshTimer);
   server.close(() => {
     db.close();
     process.exit(0);
