@@ -150,3 +150,9 @@ Verification before this follow-up publication: **67 Node tests, 41 Python tests
 ## Follow-up publication completed — 29 September 2026, 23:25 CEST
 
 Commit `ab7cc41` is on GitHub `main` and Firebase Hosting target `viaradar` is deployed. Public assets `index-BrFSYqO8.js` and `index-N5EzuWgf.css` returned HTTP200 and the service worker cache was refreshed. The restarted watchdog-owned backend reports fresh vehicle/trip feeds, `timetable.usable=true`, `timetable.stale=false`, active service for 28–29 September, and static coverage through 4 October. The public browser then showed connected R1/R4 departures and 20-second refresh status.
+
+## R1 readiness work — 29 September, 22:15 CEST
+
+The R1 afternoon audit and new read-only stability CLI reproduced 202 assigned services with low destination-only majority shares (Mataró15/77; Blanes9/45). The live predictor is deliberately unchanged. Added immutable first-live schedule contexts for future contextual evaluation; historical backfill cannot populate them or alter scores.
+
+Verification: **77 Node tests and production build passed**. Frontend assets remain `index-BrFSYqO8.js` / `index-N5EzuWgf.css`; no frontend change or Firebase redeploy is needed for this backend-only work. The verified watchdog restarted owned API process124592 at22:15:10; live table already contained oneR1 and oneR4 context and public departures returned200. New table/additive capture can be disabled without deleting events, observations or previous scores. Contextual prediction performance and a replacement public R1 engine are not established by these checks.

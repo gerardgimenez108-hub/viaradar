@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { extractAssignments, initializeAssignments, saveAssignments, assignmentMetrics, PROVENANCE } from "../server/assignments.ts";
+import { extractAssignments, initializeAssignments, saveAssignments, captureAssignments, assignmentMetrics, PROVENANCE } from "../server/assignments.ts";
 import type { Feed, Vehicle } from "../server/model.ts";
 import type { StaticData } from "../server/static.ts";
 const now = Date.parse("2026-09-28T08:00:00Z");
@@ -22,6 +22,67 @@ function feed(overrides: Partial<Vehicle> = {}, time = now): Feed { return { hea
 } }] }; }
 function extract(overrides: Partial<Vehicle> = {}, time = now) { return extractAssignments(feed(overrides, time), data, ["72305"], time, PROVENANCE.LIVE); }
 function database() { const db = new DatabaseSync(":memory:"); initializeAssignments(db); return db; }
+
+test("live schedule context starts before publication and remains immutable across timetable refreshes", () => {
+  const db = database();
+  try {
+    captureAssignments(db, feed({ vehicle: { id: "vehicle", label: "R1-123" } }), data, ["72305"], now);
+    const initial = db.prepare("SELECT * FROM assignment_service_context").get();
+    assert.equal(initial?.scheduled_at, Date.parse("2026-09-28T08:05:00Z"));
+    assert.equal(initial?.captured_at, now); assert.equal(initial?.static_imported_at, data.importedAt);
+    assert.equal(initial?.line, "R1"); assert.equal(initial?.destination, "Maçanet"); assert.equal(initial?.terminal, 0);
+    assert.equal(db.prepare("SELECT platform FROM assignment_events").get()?.platform, null);
+    const refreshed = { ...data, importedAt: new Date(now + 10000).toISOString(),
+      stopTimes: data.stopTimes.map(stop => stop.stop_id === "72305" ? { ...stop, departure_time: "10:15:00" } : stop) };
+    captureAssignments(db, feed({}, now + 20000), refreshed, ["72305"], now + 20000);
+    assert.deepEqual(db.prepare("SELECT * FROM assignment_service_context").get(), initial);
+    assert.equal(db.prepare("SELECT count(*) n FROM assignment_service_context").get()?.n, 1);
+    assert.equal(db.prepare("PRAGMA table_info(assignment_events)").all().length, 18);
+  } finally { db.close(); }
+});
+
+test("backfilled assignments never seed prospective schedule context", () => {
+  const db = database();
+  try {
+    captureAssignments(db, feed(), data, ["72305"], now, PROVENANCE.BACKFILL);
+    assert.equal(db.prepare("SELECT count(*) n FROM assignment_events").get()?.n, 1);
+    assert.equal(db.prepare("SELECT count(*) n FROM assignment_service_context").get()?.n, 0);
+  } finally { db.close(); }
+});
+
+test("invalid, stale, future and ambiguous schedule evidence cannot seed service context", () => {
+  const scenarios: [Feed, StaticData | null][] = [
+    [feed({ timestamp: now / 1000 + 1 }), data],
+    [feed({ timestamp: now / 1000 - 100 }), data],
+    [feed({ timestamp: "bad" }), data],
+    [feed({ trip: { tripId: "r1", startDate: "20260230" } }), data],
+    [feed(), { ...data, importedAt: "2026-09-29T00:00:00Z" }],
+    [feed(), { ...data, importedAt: "invalid" }],
+    [feed(), null],
+    [feed(), { ...data, stopTimes: [...data.stopTimes, { ...data.stopTimes[0], stop_sequence: "3" }] }],
+    [feed({ trip: { tripId: "r1", startDate: "20260928" } }), { ...data,
+      stopTimes: [{ ...data.stopTimes[0], departure_time: "invalid" }] }],
+    [feed({ trip: { tripId: "r1", startDate: "20260928" } }), { ...data,
+      exceptions: [{ service_id: "daily", date: "20260928", exception_type: "2" }] }],
+  ];
+  for (const [source, timetable] of scenarios) {
+    const db = database();
+    try {
+      captureAssignments(db, source, timetable, ["72305"], now);
+      assert.equal(db.prepare("SELECT count(*) n FROM assignment_service_context").get()?.n, 0);
+    } finally { db.close(); }
+  }
+});
+
+test("schedule contexts follow the same ninety-day retention as assignment events", () => {
+  const db = database();
+  try {
+    captureAssignments(db, feed(), data, ["72305"], now);
+    captureAssignments(db, { header: { timestamp: now / 1000 }, entity: [] }, data, ["72305"], now + 91 * 86400000);
+    assert.equal(db.prepare("SELECT count(*) n FROM assignment_service_context").get()?.n, 0);
+    assert.equal(db.prepare("SELECT count(*) n FROM assignment_events").get()?.n, 0);
+  } finally { db.close(); }
+});
 test("moving publication is retained when stopped update omits platform; no invented confirmation", () => {
   const db = database();
   try {

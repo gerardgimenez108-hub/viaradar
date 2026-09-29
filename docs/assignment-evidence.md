@@ -47,3 +47,9 @@ Assess assignment stability, withdrawals/missing follow-up, timestamp quality an
 A fresh same-service vehicle still targeting the station can expose an additive `lastPublishedPlatform` with value, original observation time and expiry. This is separate from `platform.kind`; the UI displays it neutrally as last published, currently unconfirmed, ahead of a historical estimate. It is limited to 15 minutes from the publication and 90 seconds from current vehicle evidence, whichever expires first. It requires the same vehicle identity and resolved service date, and disappears on cancellation, downstream movement, missing/stale source, or expiry. New official evidence takes precedence.
 
 Retained evidence never creates an official training label. Measurement marks it as a previously known publication, preventing a later artificial prediction attempt. The module can be removed together with its additive field, UI and tests without removing captured history; restore the previous measurement condition only when removing this display feature entirely.
+
+## Immutable future context
+
+`assignment_service_context` stores the first live, fresh, resolved schedule context for each station/service-date/trip, including scheduled departure and the timetable import used. It can begin before a platform is published. It is not rewritten on later timetable refreshes and is never populated from backfill. Ambiguous station visits, invalid/inactive dates and future/stale source events are excluded; retention is 90 days.
+
+This prepares honest future hour/day/service-aware evaluation. It does not activate a new public model, turn assignments into stopped labels, or prove a physical departure. Existing assignment event columns and historical prediction outcomes are unchanged. Use the [assignment diagnostic](assignment-evaluation.md) and [29 September R1 audit](r1-2026-09-29.md) before considering model promotion.

@@ -24,7 +24,13 @@ export function initializeAssignments(db: DatabaseSync): void {
     terminal INTEGER, freshness TEXT NOT NULL, provenance TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS assignment_events_station_time ON assignment_events(station_id,fetched_at);
     CREATE INDEX IF NOT EXISTS assignment_events_service_vehicle_time
-      ON assignment_events(station_id,service_date,trip_id,vehicle_id,observed_at DESC);`);
+      ON assignment_events(station_id,service_date,trip_id,vehicle_id,observed_at DESC);
+    CREATE TABLE IF NOT EXISTS assignment_service_context (
+      station_id TEXT NOT NULL, service_date TEXT NOT NULL, trip_id TEXT NOT NULL,
+      scheduled_at INTEGER NOT NULL, captured_at INTEGER NOT NULL,
+      static_imported_at TEXT NOT NULL, line TEXT, destination TEXT, terminal INTEGER,
+      PRIMARY KEY(station_id,service_date,trip_id));
+    CREATE INDEX IF NOT EXISTS assignment_service_context_capture ON assignment_service_context(captured_at);`);
 }
 function indexStatic(data: StaticData) {
   const stops = new Map<string, Row[]>();
@@ -103,9 +109,38 @@ export function saveAssignments(db: DatabaseSync, events: readonly AssignmentEve
   return inserted;
 }
 export function captureAssignments(db: DatabaseSync, feed: Feed, data: StaticData | null, stationIds: readonly string[], fetchedAt: number, provenance: Provenance = PROVENANCE.LIVE): number {
-  const inserted = saveAssignments(db, extractAssignments(feed, data, stationIds, fetchedAt, provenance));
+  const events = extractAssignments(feed, data, stationIds, fetchedAt, provenance);
+  const inserted = saveAssignments(db, events);
+  saveServiceContexts(db, events, data);
   db.prepare("DELETE FROM assignment_events WHERE fetched_at < ?").run(fetchedAt - 90 * 86400000);
+  db.prepare("DELETE FROM assignment_service_context WHERE captured_at < ?").run(fetchedAt - 90 * 86400000);
   return inserted;
+}
+function saveServiceContexts(db: DatabaseSync, events: readonly AssignmentEvent[], data: StaticData | null): void {
+  if (!data || !Number.isFinite(Date.parse(data.importedAt))) return;
+  const index = indices.get(data);
+  if (!index) return;
+  const insert = db.prepare(`INSERT OR IGNORE INTO assignment_service_context
+    (station_id,service_date,trip_id,scheduled_at,captured_at,static_imported_at,line,destination,terminal)
+    VALUES(?,?,?,?,?,?,?,?,?)`);
+  db.exec("BEGIN");
+  try {
+    for (const event of events) {
+      // Freeze only prospective live context: today's timetable cannot reconstruct old snapshots.
+      if (event.provenance !== PROVENANCE.LIVE || event.freshness !== "fresh" ||
+          !event.tripId || !event.serviceDate || !Number.isFinite(event.fetchedAt) ||
+          event.fetchedAt < Date.parse(data.importedAt)) continue;
+      const trip = index.trips.get(event.tripId);
+      const stops = index.stops.get(event.tripId)?.filter(stop => stop.stop_id === event.stationId) ?? [];
+      if (!trip || stops.length !== 1 || !stops[0].departure_time ||
+          !activeService(trip.service_id, event.serviceDate, index.calendar, index.exceptions)) continue;
+      const scheduledAt = gtfsTime(event.serviceDate, stops[0].departure_time);
+      if (!Number.isFinite(scheduledAt)) continue;
+      insert.run(event.stationId, event.serviceDate, event.tripId, scheduledAt, event.fetchedAt,
+        data.importedAt, event.line, event.destination, event.terminal);
+    }
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 export function assignmentMetrics(db: DatabaseSync, stationId: string, now = Date.now()) {
   const rows = db.prepare(`WITH events AS (
