@@ -15,8 +15,9 @@ from ml import runner
 def successful_evaluation(monkeypatch):
     report = {"status": "insufficient_data", "counts": {"attempts": 15}}
     def execute(command, **kwargs):
-        assert command[1:3] == ["-m", "ml"]
-        assert kwargs["timeout"] == 1080
+        assert command[1] == "-m"
+        assert command[2] in ("ml", "ml.assignment_evaluation")
+        assert kwargs["timeout"] == (1080 if command[2] == "ml" else 60)
         Path(command[command.index("--output") + 1]).write_text(json.dumps(report), encoding="utf-8")
         return SimpleNamespace(returncode=0, stderr="")
     monkeypatch.setattr(runner.subprocess, "run", execute)
@@ -97,7 +98,7 @@ def test_corrupt_status_does_not_block_next_run(tmp_path, successful_evaluation)
     assert json.loads((tmp_path / "status.json").read_text())["state"] == "success"
 
 
-@pytest.mark.parametrize("name", ["report.json", "status.json", "runner.lock"])
+@pytest.mark.parametrize("name", ["report.json", "assignment-report.json", "status.json", "runner.lock"])
 def test_output_cannot_alias_source_database(tmp_path, name):
     database = tmp_path / name
     database.write_bytes(b"source must stay intact")

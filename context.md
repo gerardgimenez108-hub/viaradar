@@ -1,6 +1,14 @@
 # ViaRadar — continuation context
 
-Updated: **28 September 2026**. This is the handoff entry point, not a substitute for checking running services and current code.
+Updated: **2 October 2026**. This is the handoff entry point, not a substitute for checking running services and current code.
+
+## Current R1 work — 2 October
+
+The public predictor remains `historical-frequency-v1`. The latest audit found **13 strict R1 observations**, versus **357 services with published assignments**; these are different targets, not interchangeable training counts. The existing hourly ML experiment ran successfully but trained on only 5 R1 labels versus 324 R4 labels. Its strong aggregate agreement does not establish R1 performance.
+
+A separate assignment shadow pipeline now consumes immutable schedule contexts and published-assignment events. It checks predictions ten minutes before scheduled departure, using only context already captured, and learns the last fresh publication only after a fixed two-hour outcome window closes. It compares CatBoost, River and a destination-frequency reference per line. It never changes passenger predictions or writes the source database. See [assignment model evaluation](docs/assignment-models.md) for the contract, measured results and next decision gate.
+
+The existing hourly `ViaRadar ML Experiments` task runs both evaluations. Check `data/ml/status.json`, including `assignmentEvaluation`, and `data/ml/assignment-report.json`; a successful run can legitimately report insufficient data. Python-only changes are picked up on the next task launch, without an API restart or Firebase frontend deployment. Dated sections below are historical records, not current deployment proof.
 
 ## Product and non-negotiables
 
@@ -53,7 +61,7 @@ Current predictor: `historical-frequency-v1`, grouping by station/line/destinati
 - The board shows only the next three hours. An empty board overnight is normal: at 00:36 on 27 September the next active scheduled departure was 05:21. Do not invent service or restart a healthy API just to populate the screen.
 - The PC must be awake, connected and signed in for its per-user watchdog; there is no uptime guarantee. Tailscale and Node are separate dependencies.
 - Vite reads `.env.local`; Node does not. Hosting predeploy needs `VITE_API_BASE_URL` explicitly in the shell. A frontend built with the public URL still uses the public tunnel when opened on localhost.
-- The GTFS timetable is loaded at server start. Reimporting does not refresh the running in-memory dataset; restart deliberately after import.
+- The GTFS timetable refreshes automatically with last-known-good retention and in-memory adoption. Inspect timetable freshness/coverage in health; do not assume a successful download guarantees future service coverage.
 - Snapshot count is not independent train count. Training observations are one per service date/trip/station and can be updated with later evidence.
 - An official stopped-at platform is an observed publication, not proof of physical departure. Measurement must preserve that distinction.
 - Renfe messages may remain in Catalan if that is the only supplied translation. Do not silently invent a translation or severity.

@@ -17,6 +17,8 @@ If `py -3.11` is not registered, use the absolute path of an installed Python 3.
 
 ## Automatic evaluation on the Windows host
 
+Since 2 October, the runner also performs a **separate published-assignment evaluation** using immutable schedule contexts. See [assignment models](assignment-models.md). Its results are in `data/ml/assignment-report.json`, with status under `assignmentEvaluation` in `status.json`. The original experiment described below keeps its stopped-platform target; the two datasets and scores are not merged.
+
 After installing the Python environment, register the independent worker:
 
 ```powershell

@@ -75,7 +75,7 @@ def run_once(db: Path, output_dir: Path, station: str = "72305") -> int:
     # Final destinations must not alias the source, including symlinks/hardlinks.
     source = db.resolve()
     protected = {source, Path(str(source) + "-wal"), Path(str(source) + "-shm")}
-    for name in ("report.json", "status.json", "runner.lock"):
+    for name in ("report.json", "assignment-report.json", "status.json", "runner.lock"):
         destination = output_dir / name
         if destination.resolve() in protected or any(
             destination.exists() and item.exists() and destination.samefile(item)
@@ -132,6 +132,31 @@ def _run_locked(db: Path, output_dir: Path, station: str) -> int:
         result = 1
     finally:
         temporary.unlink(missing_ok=True)
+    assignment_temporary = output_dir / f".assignment-{uuid.uuid4().hex}.json"
+    try:
+        assignment_run = subprocess.run(
+            [sys.executable, "-m", "ml.assignment_evaluation", "--db", str(db.resolve()),
+             "--output", str(assignment_temporary.resolve()), "--station", station],
+            cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True,
+            timeout=60, check=False,
+        )
+        if assignment_run.returncode:
+            raise RuntimeError(f"Assignment evaluation exited {assignment_run.returncode}: {assignment_run.stderr[-2000:]}")
+        assignment_report = json.loads(assignment_temporary.read_text(encoding="utf-8"))
+        if not isinstance(assignment_report, dict) or not isinstance(assignment_report.get("counts"), dict) or not isinstance(assignment_report.get("status"), str):
+            raise ValueError("Invalid assignment report")
+        atomic_json(output_dir / "assignment-report.json", assignment_report)
+        status["assignmentEvaluation"] = {"state": "success", "reportStatus": assignment_report["status"],
+            "lastSuccessAt": datetime.now(timezone.utc).isoformat(), "counts": assignment_report["counts"]}
+    except Exception as error:
+        status["assignmentEvaluation"] = {"state": "error", "error": str(error)[-2500:],
+            "lastSuccessAt": previous.get("assignmentEvaluation", {}).get("lastSuccessAt")
+                if isinstance(previous.get("assignmentEvaluation"), dict) else None}
+        if result == 0:
+            status["state"] = "partial_error"
+        result = 1
+    finally:
+        assignment_temporary.unlink(missing_ok=True)
     status["finishedAt"] = datetime.now(timezone.utc).isoformat()
     atomic_json(status_path, status)
     print(json.dumps(status))
